@@ -1,0 +1,142 @@
+{% extends 'dashboard/base.html' %}
+{% load l10n %}
+{% block title %}Vista Mensajero{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <p class="text-sm text-gray-500 uppercase tracking-widest">Panel operativo</p>
+        <h1 class="text-2xl font-bold text-gray-800">Vista de mensajero</h1>
+    </div>
+    <span class="bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-semibold">
+        Solo seguimiento de servicios
+    </span>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow p-5 border-l-4 border-blue-500">
+        <p class="text-gray-500 text-sm">En progreso</p>
+        <p class="text-3xl font-bold text-blue-500">{{ en_progreso }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 border-l-4 border-yellow-400">
+        <p class="text-gray-500 text-sm">Disponibles</p>
+        <p class="text-3xl font-bold text-yellow-500">{{ sin_asignar }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow p-5 border-l-4 border-green-500">
+        <p class="text-gray-500 text-sm">Terminados</p>
+        <p class="text-3xl font-bold text-green-500">{{ terminados_count }}</p>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <section class="bg-white rounded-2xl shadow p-5">
+        <h2 class="font-bold text-gray-800 mb-4">Asignados</h2>
+        <div class="space-y-3 max-h-[32rem] overflow-auto pr-1">
+            {% for servicio in asignados %}
+            <article class="border rounded-xl p-4">
+                <div class="flex justify-between gap-3 mb-2">
+                    <strong class="text-gray-800">Orden #{{ servicio.orden }}</strong>
+                    <span class="text-xs px-2 py-1 rounded-full {% if servicio.estado == 'en_progreso' %}bg-blue-100 text-blue-700{% else %}bg-green-100 text-green-700{% endif %}">
+                        {{ servicio.get_estado_display }}
+                    </span>
+                </div>
+                <p class="text-sm text-gray-500"><strong>Origen:</strong> {{ servicio.origen }}</p>
+                <p class="text-sm text-gray-500"><strong>Destino:</strong> {{ servicio.destino }}</p>
+                <p class="text-sm text-gray-500"><strong>Vehículo:</strong> {{ servicio.tipo_vehiculo }}</p>
+
+                {% if servicio.origen_lat and servicio.origen_lng and servicio.destino_lat and servicio.destino_lng %}
+                <a
+                    href="https://www.google.com/maps/dir/?api=1&origin={{ servicio.origen_lat|unlocalize }},{{ servicio.origen_lng|unlocalize }}&destination={{ servicio.destino_lat|unlocalize }},{{ servicio.destino_lng|unlocalize }}&travelmode=driving"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="inline-flex items-center gap-2 mt-3 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+                >
+                    <i class="fas fa-route"></i> Abrir ruta
+                </a>
+                {% endif %}
+
+                {% if servicio.tiene_mapa %}
+                <div class="mt-3">
+                    {% include 'dashboard/partials/mini_map.html' with servicio=servicio map_id='mensajero-map-'|add:servicio.id %}
+                </div>
+                {% endif %}
+            </article>
+            {% empty %}
+            <p class="text-sm text-gray-400">No tienes servicios asignados.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="bg-white rounded-2xl shadow p-5">
+        <h2 class="font-bold text-gray-800 mb-4">Disponibles</h2>
+        <div class="space-y-3 max-h-[32rem] overflow-auto pr-1">
+            {% for servicio in disponibles %}
+            <article class="border rounded-xl p-4 border-dashed border-yellow-300 bg-yellow-50/40">
+                <div class="flex justify-between gap-3 mb-2">
+                    <strong class="text-gray-800">Orden #{{ servicio.orden }}</strong>
+                    <span class="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">Sin asignar</span>
+                </div>
+                <p class="text-sm text-gray-500"><strong>Origen:</strong> {{ servicio.origen }}</p>
+                <p class="text-sm text-gray-500"><strong>Destino:</strong> {{ servicio.destino }}</p>
+                <p class="text-sm text-gray-500"><strong>Prioridad:</strong> {{ servicio.get_prioridad_display }}</p>
+
+                {% if servicio.origen_lat and servicio.origen_lng and servicio.destino_lat and servicio.destino_lng %}
+                <a
+                    href="https://www.google.com/maps/dir/?api=1&origin={{ servicio.origen_lat|unlocalize }},{{ servicio.origen_lng|unlocalize }}&destination={{ servicio.destino_lat|unlocalize }},{{ servicio.destino_lng|unlocalize }}&travelmode=driving"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="inline-flex items-center gap-2 mt-3 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+                >
+                    <i class="fas fa-route"></i> Abrir ruta
+                </a>
+                {% endif %}
+
+                {% if servicio.tiene_mapa %}
+                <div class="mt-3">
+                    {% include 'dashboard/partials/mini_map.html' with servicio=servicio map_id='disponible-map-'|add:servicio.id %}
+                </div>
+                {% endif %}
+            </article>
+            {% empty %}
+            <p class="text-sm text-gray-400">No hay servicios disponibles.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="bg-white rounded-2xl shadow p-5">
+        <h2 class="font-bold text-gray-800 mb-4">Terminados</h2>
+        <div class="space-y-3 max-h-[32rem] overflow-auto pr-1">
+            {% for servicio in terminados %}
+            <article class="border rounded-xl p-4">
+                <div class="flex justify-between gap-3 mb-2">
+                    <strong class="text-gray-800">Orden #{{ servicio.orden }}</strong>
+                    <span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Terminado</span>
+                </div>
+                <p class="text-sm text-gray-500"><strong>Origen:</strong> {{ servicio.origen }}</p>
+                <p class="text-sm text-gray-500"><strong>Destino:</strong> {{ servicio.destino }}</p>
+                <p class="text-sm text-gray-500"><strong>Cliente:</strong> {{ servicio.cliente.get_full_name|default:servicio.cliente.username }}</p>
+
+                {% if servicio.origen_lat and servicio.origen_lng and servicio.destino_lat and servicio.destino_lng %}
+                <a
+                    href="https://www.google.com/maps/dir/?api=1&origin={{ servicio.origen_lat|unlocalize }},{{ servicio.origen_lng|unlocalize }}&destination={{ servicio.destino_lat|unlocalize }},{{ servicio.destino_lng|unlocalize }}&travelmode=driving"
+                    target="_blank"
+                    rel="noreferrer"
+                    class="inline-flex items-center gap-2 mt-3 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+                >
+                    <i class="fas fa-route"></i> Abrir ruta
+                </a>
+                {% endif %}
+
+                {% if servicio.tiene_mapa %}
+                <div class="mt-3">
+                    {% include 'dashboard/partials/mini_map.html' with servicio=servicio map_id='terminado-map-'|add:servicio.id %}
+                </div>
+                {% endif %}
+            </article>
+            {% empty %}
+            <p class="text-sm text-gray-400">No tienes servicios terminados.</p>
+            {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

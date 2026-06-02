@@ -1,0 +1,162 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+{% url 'dashboard:inicio' as home_url %}
+<div class="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+    <div class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+        <div class="border-b border-gray-200 bg-white px-6 py-6 text-gray-900 md:px-8">
+            <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                    <h1 class="text-3xl font-black tracking-tight text-gray-900">{{ titulo }}</h1>
+                    <p class="mt-2 max-w-2xl text-gray-700">{{ subtitulo }}</p>
+                </div>
+                <div class="rounded-2xl bg-gray-50 px-4 py-3 border border-gray-200 text-sm text-gray-700">
+                    {% if servicio %}
+                    <div class="font-bold text-gray-900">Orden #{{ servicio.orden }}</div>
+                    <div class="opacity-90 text-gray-700">{{ servicio.get_estado_display }}</div>
+                    {% if servicio.creado_por %}
+                    <div class="mt-2 opacity-90 text-gray-700">Creado por: {{ servicio.creado_por.get_full_name|default:servicio.creado_por.username }}</div>
+                    {% endif %}
+                    {% else %}
+                    <div class="font-bold text-gray-900">Nuevo registro</div>
+                    <div class="opacity-90 text-gray-700">Solo cliente y coordinador</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    <div class="bg-white p-6 md:p-8">
+            {% if error %}
+            <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <i class="fas fa-circle-exclamation"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+
+                <div class="rounded-2xl border border-gray-200 bg-white p-5">
+                    <p class="text-sm font-bold uppercase tracking-widest text-gray-500 mb-4">Datos generales</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Descripción</label>
+                            <textarea name="descripcion" rows="3" placeholder="Descripción general del servicio" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>{{ descripcion_value }}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Tipo de servicio</label>
+                            <input type="text" name="tipo_servicio" value="{{ tipo_servicio_value }}" placeholder="Ej: Administrativo" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Tipo de pago</label>
+                            <input type="text" name="tipo_pago" value="{{ tipo_pago_value }}" placeholder="Ej: Convenio" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Tipo de recorrido</label>
+                            <input type="text" name="tipo_recorrido" value="{{ tipo_recorrido_value }}" placeholder="Ej: Solo ida" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-gray-900 font-semibold mb-2">Descripción del pago</label>
+                            <textarea name="descripcion_pago" rows="2" placeholder="Observaciones del pago" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>{{ descripcion_pago_value }}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-gray-200 bg-white p-5">
+                    <p class="text-sm font-bold uppercase tracking-widest text-gray-500 mb-4">Solicitante y receptor</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Nombre del solicitante</label>
+                            <input type="text" name="nombre_solicitante" value="{{ nombre_solicitante_value }}" placeholder="Nombre completo" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Teléfono del solicitante</label>
+                            <input type="text" name="telefono_solicitante" value="{{ telefono_solicitante_value }}" placeholder="Ej: 3001234567" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Nombre de quien recibe</label>
+                            <input type="text" name="nombre_quien_recibe" value="{{ nombre_quien_recibe_value }}" placeholder="Nombre del receptor" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Teléfono de quien recibe</label>
+                            <input type="text" name="telefono_quien_recibe" value="{{ telefono_quien_recibe_value }}" placeholder="Ej: (602) 1234567" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-gray-200 bg-white p-5">
+                    <p class="text-sm font-bold uppercase tracking-widest text-gray-500 mb-4">Ubicación y fechas</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Ciudad de origen</label>
+                            <input type="text" name="ciudad_origen" value="{{ ciudad_origen_value }}" placeholder="Ej: Cali" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Ciudad de destino</label>
+                            <input type="text" name="ciudad_destino" value="{{ ciudad_destino_value }}" placeholder="Ej: Cali" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                        <div>
+                            <label class="block text-gray-900 font-semibold mb-2">Fecha de entrega deseada</label>
+                            <input type="date" name="fecha_entrega_deseada" value="{{ fecha_entrega_deseada_value }}" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-gray-900 font-semibold mb-2">Sede</label>
+                        <input type="text" name="sede" value="{{ sede_value }}" placeholder="Ej: Sede Principal" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                    </div>
+                    <div>
+                        <label class="block text-gray-900 font-semibold mb-2">Área</label>
+                        <input type="text" name="area" value="{{ area_value }}" placeholder="Ej: Back Office" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-gray-900 font-semibold mb-2">Origen</label>
+                    <textarea name="origen" rows="2" placeholder="Dirección de recogida" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>{{ origen_value }}</textarea>
+                </div>
+
+                <div>
+                    <label class="block text-gray-900 font-semibold mb-2">Destino</label>
+                    <textarea name="destino" rows="2" placeholder="Dirección de entrega" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>{{ destino_value }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-gray-900 font-semibold mb-2">Tipo de vehículo</label>
+                        <select name="tipo_vehiculo" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                            <option value="moto" {% if tipo_vehiculo_seleccionado == 'moto' %}selected{% endif %}>Moto</option>
+                            <option value="camioneta" {% if tipo_vehiculo_seleccionado == 'camioneta' %}selected{% endif %}>Camioneta</option>
+                            <option value="bicicleta" {% if tipo_vehiculo_seleccionado == 'bicicleta' %}selected{% endif %}>Bicicleta</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-900 font-semibold mb-2">Prioridad</label>
+                        <select name="prioridad" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                            <option value="normal" {% if prioridad_seleccionada == 'normal' %}selected{% endif %}>Normal</option>
+                            <option value="alta" {% if prioridad_seleccionada == 'alta' %}selected{% endif %}>Alta</option>
+                        </select>
+                    </div>
+                </div>
+
+                                <div class="flex flex-col gap-3 pt-2 md:flex-row md:items-center md:justify-between">
+                                        <button type="button" onclick="confirmarSalidaServicio()" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50">Cancelar</button>
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 py-3 font-bold text-white hover:bg-red-700 transition {% if edicion_bloqueada %}opacity-60 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                        <i class="fas fa-save"></i> {{ boton_texto }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function confirmarSalidaServicio() {
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalConfirmarSalirServicio'));
+        modal.show();
+    }
+</script>
+
+{% endblock %}

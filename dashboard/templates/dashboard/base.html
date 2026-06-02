@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mensajería Integral{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .mini-map {
+            position: relative;
+            width: 100%;
+            height: 11rem;
+            border-radius: 1rem;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+        }
+
+        .mini-map__frame {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border: 0;
+            background: #ffffff;
+        }
+
+        .mini-map__canvas {
+            width: 100%;
+            height: 100%;
+            display: none;
+            background: #ffffff;
+        }
+
+        .mini-map__fallback {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            font-size: 0.875rem;
+            text-align: center;
+            padding: 1rem;
+            z-index: 3;
+            background: rgba(255,255,255,0.94);
+        }
+
+        .mini-map__legend {
+            position: absolute;
+            left: 0.75rem;
+            right: 0.75rem;
+            bottom: 0.75rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .mini-map__legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: #ffffff;
+            border-radius: 999px;
+            padding: 0.25rem 0.55rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .mini-map__legend-dot {
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 999px;
+            display: inline-block;
+        }
+
+        .mini-map__expand-btn {
+            position: absolute;
+            top: 0.75rem;
+            left: 0.75rem;
+            z-index: 4;
+            border: 0;
+            border-radius: 0.75rem;
+            background: #ffffff;
+            color: #dc2626;
+            padding: 0.5rem 0.85rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.14);
+        }
+
+        .mini-map-modal {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 60;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        .mini-map-modal.is-open {
+            display: flex;
+        }
+
+        .mini-map-modal__panel {
+            width: min(1100px, 100%);
+            background: #ffffff;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 24px 70px rgba(2, 6, 23, 0.4);
+        }
+
+        .mini-map-modal__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .mini-map-modal__title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .mini-map-modal__close {
+            border: 0;
+            background: #f3f4f6;
+            color: #111827;
+            border-radius: 0.7rem;
+            padding: 0.45rem 0.8rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .mini-map.mini-map--modal {
+            height: min(72vh, 760px);
+            border-radius: 0;
+            border: 0;
+        }
+
+        details.service-card > summary {
+            list-style: none;
+            cursor: pointer;
+        }
+
+        details.service-card > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details.service-card[open] {
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+        }
+    </style>
+    <script>
+        window.GOOGLE_MAPS_API_KEY = "{{ google_maps_api_key|default:''|escapejs }}";
+    </script>
+    <script>
+        (function () {
+            const parseValue = (value) => value === '' || value === null || value === undefined ? null : Number(value);
+            const formatCoordinate = (value) => Number(value).toFixed(6);
+            const mapStates = new WeakMap();
+            let googleMapsLoadPromise;
+            let activeModalSource = null;
+
+            const normalizePoints = (element, payload) => ({
+                originLat: parseValue(payload?.origen_lat ?? element.dataset.originLat),
+                originLng: parseValue(payload?.origen_lng ?? element.dataset.originLng),
+                destinationLat: parseValue(payload?.destino_lat ?? element.dataset.destinationLat),
+                destinationLng: parseValue(payload?.destino_lng ?? element.dataset.destinationLng),
+                courierLat: parseValue(payload?.mensajero_lat ?? element.dataset.courierLat),
+                courierLng: parseValue(payload?.mensajero_lng ?? element.dataset.courierLng),
+            });
+
+            const hasPair = (lat, lng) => Number.isFinite(lat) && Number.isFinite(lng);
+            const hasAnyPoint = (points) => hasPair(points.originLat, points.originLng)
+                || hasPair(points.destinationLat, points.destinationLng)
+                || hasPair(points.courierLat, points.courierLng);
+
+            const toPoint = (lat, lng) => `${formatCoordinate(lat)},${formatCoordinate(lng)}`;
+
+            const buildGoogleEmbedUrl = (points) => {
+                const hasOrigin = hasPair(points.originLat, points.originLng);
+                const hasDestination = hasPair(points.destinationLat, points.destinationLng);
+                const hasCourier = hasPair(points.courierLat, points.courierLng);
+
+                if (hasCourier) {
+                    const params = new URLSearchParams({
+                        q: toPoint(points.courierLat, points.courierLng),
+                        hl: 'es',
+                        z: '16',
+                        output: 'embed',
+                    });
+                    return `https://www.google.com/maps?${params.toString()}`;
+                }
+
+                const routeSource = hasCourier
+                    ? { lat: points.courierLat, lng: points.courierLng }
+                    : hasOrigin
+                        ? { lat: points.originLat, lng: points.originLng }
+                        : null;
+                const routeDestination = hasDestination
+                    ? { lat: points.destinationLat, lng: points.destinationLng }
+                    : hasOrigin
+                        ? { lat: points.originLat, lng: points.originLng }
+                        : null;
+
+                if (routeSource && routeDestination && (routeSource.lat !== routeDestination.lat || routeSource.lng !== routeDestination.lng)) {
+                    const params = new URLSearchParams({
+                        saddr: toPoint(routeSource.lat, routeSource.lng),
+                        daddr: toPoint(routeDestination.lat, routeDestination.lng),
+                        hl: 'es',
+                        z: '14',
+                        output: 'embed',
+                    });
+                    return `https://www.google.com/maps?${params.toString()}`;
+                }
+
+                if (hasDestination) {
+                    const params = new URLSearchParams({
+                        q: toPoint(points.destinationLat, points.destinationLng),
+                        hl: 'es',
+                        z: '16',
+                        output: 'embed',
+                    });
+                    return `https://www.google.com/maps?${params.toString()}`;
+                }
+
+                if (hasOrigin) {
+                    const params = new URLSearchParams({
+                        q: toPoint(points.originLat, points.originLng),
+                        hl: 'es',
+                        z: '16',
+                        output: 'embed',
+                    });
+                    return `https://www.google.com/maps?${params.toString()}`;
+                }
+
+                return null;
+            };
+
+            const renderLegend = (element, points) => {
+                const legend = element.querySelector('.mini-map__legend');
+                if (!legend) {
+                    return;
+                }
+
+                const markers = [
+                    hasPair(points.originLat, points.originLng) ? { label: 'Origen', color: '#2563eb' } : null,
+                    hasPair(points.courierLat, points.courierLng) ? { label: '🛵 Mensajero', color: '#f59e0b' } : null,
+                    hasPair(points.destinationLat, points.destinationLng) ? { label: 'Destino', color: '#16a34a' } : null,
+                ].filter(Boolean);
+
+                legend.innerHTML = markers.map((point) => `
+                  <span class="mini-map__legend-item">
+                    <span class="mini-map__legend-dot" style="background:${point.color}"></span>
+                    <span>${point.label}</span>
+                  </span>
+                `).join('');
+            };
+
+            const applyPayloadToDataset = (element, payload) => {
+                if (!payload || typeof payload !== 'object') {
+                    return;
+                }
+
+                const mapping = {
+                    origen_lat: 'originLat',
+                    origen_lng: 'originLng',
+                    destino_lat: 'destinationLat',
+                    destino_lng: 'destinationLng',
+                    mensajero_lat: 'courierLat',
+                    mensajero_lng: 'courierLng',
+                };
+
+                Object.entries(mapping).forEach(([sourceKey, datasetKey]) => {
+                    const value = payload[sourceKey];
+                    if (value === null || value === undefined || value === '') {
+                        return;
+                    }
+                    element.dataset[datasetKey] = value;
+                });
+            };
+
+            const copyMapDataset = (sourceElement, targetElement) => {
+                const keys = [
+                    'apiUrl',
+                    'serviceId',
+                    'originLat',
+                    'originLng',
+                    'destinationLat',
+                    'destinationLng',
+                    'courierLat',
+                    'courierLng',
+                ];
+
+                keys.forEach((key) => {
+                    const value = sourceElement?.dataset?.[key];
+                    if (value !== undefined) {
+                        targetElement.dataset[key] = value;
+                    }
+                });
+            };
+
+            const getGoogleMapState = (element) => {
+                if (mapStates.has(element)) {
+                    return mapStates.get(element);
+                }
+
+                const canvas = element.querySelector('.mini-map__canvas');
+                if (!canvas || !window.google || !window.google.maps) {
+                    return null;
+                }
+
+                const map = new window.google.maps.Map(canvas, {
+                    mapTypeControl: false,
+                    streetViewControl: false,
+                    fullscreenControl: false,
+                    zoomControl: true,
+                    gestureHandling: 'cooperative',
+                    clickableIcons: false,
+                });
+
+                const state = {
+                    map,
+                    canvas,
+                    markers: {
+                        origin: null,
+                        destination: null,
+                        courier: null,
+                    },
+                    route: null,
+                };
+
+                mapStates.set(element, state);
+                return state;
+            };
+
+            const setMarker = (state, markerKey, point, options = {}) => {
+                if (!point) {
+                    if (state.markers[markerKey]) {
+                        state.markers[markerKey].setMap(null);
+                        state.markers[markerKey] = null;
+                    }
+                    return;
+                }
+
+                const position = { lat: point.lat, lng: point.lng };
+                if (!state.markers[markerKey]) {
+                    state.markers[markerKey] = new window.google.maps.Marker({
+                        map: state.map,
+                        position,
+                        ...options,
+                    });
+                    return;
+                }
+
+                state.markers[markerKey].setPosition(position);
+                if (options.label) {
+                    state.markers[markerKey].setLabel(options.label);
+                }
+                if (options.icon) {
+                    state.markers[markerKey].setIcon(options.icon);
+                }
+                if (options.title) {
+                    state.markers[markerKey].setTitle(options.title);
+                }
+            };
+
+            const renderWithGoogleJs = (element, points) => {
+                if (!window.google || !window.google.maps) {
+                    return false;
+                }
+
+                const state = getGoogleMapState(element);
+                if (!state) {
+                    return false;
+                }
+
+                const origin = hasPair(points.originLat, points.originLng)
+                    ? { lat: points.originLat, lng: points.originLng }
+                    : null;
+                const destination = hasPair(points.destinationLat, points.destinationLng)
+                    ? { lat: points.destinationLat, lng: points.destinationLng }
+                    : null;
+                const courier = hasPair(points.courierLat, points.courierLng)
+                    ? { lat: points.courierLat, lng: points.courierLng }
+                    : null;
+
+                setMarker(state, 'origin', origin, {
+                    title: 'Origen',
+                    icon: {
+                        path: window.google.maps.SymbolPath.CIRCLE,
+                        scale: 6,
+                        fillColor: '#2563eb',
+                        fillOpacity: 1,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 2,
+                    },
+                });
+
+                setMarker(state, 'destination', destination, {
+                    title: 'Destino',
+                    icon: {
+                        path: window.google.maps.SymbolPath.CIRCLE,
+                        scale: 6,
+                        fillColor: '#16a34a',
+                        fillOpacity: 1,
+                        strokeColor: '#ffffff',
+                        strokeWeight: 2,
+                    },
+                });
+
+                setMarker(state, 'courier', courier, {
+                    title: 'Mensajero',
+                    label: {
+                        text: '🛵',
+                        fontSize: '22px',
+                    },
+                    icon: {
+                        path: window.google.maps.SymbolPath.CIRCLE,
+                        scale: 12,
+                        fillColor: '#f59e0b',
+                        fillOpacity: 0.18,
+                        strokeColor: '#f59e0b',
+                        strokeWeight: 2,
+                    },
+                });
+
+                const routeFrom = courier || origin;
+                const routeTo = destination || origin;
+                const routePoints = [];
+                if (routeFrom) {
+                    routePoints.push(routeFrom);
+                }
+                if (routeTo && (!routeFrom || routeFrom.lat !== routeTo.lat || routeFrom.lng !== routeTo.lng)) {
+                    routePoints.push(routeTo);
+                }
+
+                if (routePoints.length > 1) {
+                    if (!state.route) {
+                        state.route = new window.google.maps.Polyline({
+                            map: state.map,
+                            path: routePoints,
+                            geodesic: true,
+                            strokeColor: '#0f172a',
+                            strokeOpacity: 0.85,
+                            strokeWeight: 3,
+                        });
+                    } else {
+                        state.route.setPath(routePoints);
+                    }
+                } else if (state.route) {
+                    state.route.setMap(null);
+                    state.route = null;
+                }
+
+                const bounds = new window.google.maps.LatLngBounds();
+                [origin, courier, destination].filter(Boolean).forEach((point) => bounds.extend(point));
+
+                if (!bounds.isEmpty()) {
+                    if (bounds.getNorthEast().equals(bounds.getSouthWest())) {
+                        state.map.setCenter(bounds.getCenter());
+                        state.map.setZoom(16);
+                    } else {
+                        state.map.fitBounds(bounds, 28);
+                    }
+                }
+
+                return true;
+            };
+
+            const toggleMapMode = (element, useGoogleJs) => {
+                const canvas = element.querySelector('.mini-map__canvas');
+                const frame = element.querySelector('.mini-map__frame');
+                if (canvas) {
+                    canvas.style.display = useGoogleJs ? 'block' : 'none';
+                }
+                if (frame) {
+                    frame.style.display = useGoogleJs ? 'none' : 'block';
+                }
+            };
+
+            const loadGoogleMapsScript = () => {
+                const apiKey = window.GOOGLE_MAPS_API_KEY;
+                if (!apiKey) {
+                    return Promise.resolve(false);
+                }
+
+                if (window.google && window.google.maps) {
+                    return Promise.resolve(true);
+                }
+
+                if (googleMapsLoadPromise) {
+                    return googleMapsLoadPromise;
+                }
+
+                googleMapsLoadPromise = new Promise((resolve) => {
+                    const script = document.createElement('script');
+                    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}`;
+                    script.async = true;
+                    script.defer = true;
+                    script.onload = () => resolve(true);
+                    script.onerror = () => resolve(false);
+                    document.head.appendChild(script);
+                });
+
+                return googleMapsLoadPromise;
+            };
+
+            const getModalElements = () => {
+                const modal = document.getElementById('mini-map-modal');
+                const modalMap = document.getElementById('mini-map-modal-map');
+                return { modal, modalMap };
+            };
+
+            const closeMiniMapModal = () => {
+                const { modal } = getModalElements();
+                if (!modal) {
+                    return;
+                }
+
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+                activeModalSource = null;
+            };
+
+            const openMiniMapModal = (sourceElement) => {
+                const { modal, modalMap } = getModalElements();
+                if (!modal || !modalMap) {
+                    return;
+                }
+
+                activeModalSource = sourceElement;
+                copyMapDataset(sourceElement, modalMap);
+                renderMiniMap(modalMap, null);
+
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            };
+
+            const renderMiniMap = (element, payload) => {
+                applyPayloadToDataset(element, payload);
+                const points = normalizePoints(element, payload);
+                const frame = element.querySelector('.mini-map__frame');
+                const fallback = element.querySelector('.mini-map__fallback');
+
+                if (!frame || !fallback) {
+                    return;
+                }
+
+                if (!hasAnyPoint(points)) {
+                    fallback.style.display = 'flex';
+                    frame.removeAttribute('src');
+                    toggleMapMode(element, false);
+                    renderLegend(element, points);
+                    return;
+                }
+
+                const renderedWithGoogleJs = renderWithGoogleJs(element, points);
+                if (renderedWithGoogleJs) {
+                    fallback.style.display = 'none';
+                    toggleMapMode(element, true);
+                    renderLegend(element, points);
+                    return;
+                }
+
+                const embedUrl = buildGoogleEmbedUrl(points);
+                if (!embedUrl) {
+                    fallback.style.display = 'flex';
+                    frame.removeAttribute('src');
+                    toggleMapMode(element, false);
+                    renderLegend(element, points);
+                    return;
+                }
+
+                fallback.style.display = 'none';
+                toggleMapMode(element, false);
+                if (frame.dataset.currentSrc !== embedUrl) {
+                    frame.src = embedUrl;
+                    frame.dataset.currentSrc = embedUrl;
+                }
+                renderLegend(element, points);
+            };
+
+            const updateMiniMaps = async () => {
+                const elements = document.querySelectorAll('.mini-map[data-api-url]');
+                for (const element of elements) {
+                    if (element.id === 'mini-map-modal-map') {
+                        continue;
+                    }
+
+                    const apiUrl = element.dataset.apiUrl;
+                    if (!apiUrl) {
+                        continue;
+                    }
+
+                    try {
+                        const response = await fetch(apiUrl, { credentials: 'same-origin' });
+                        if (!response.ok) {
+                            continue;
+                        }
+
+                        const payload = await response.json();
+                        renderMiniMap(element, payload);
+
+                        if (activeModalSource === element) {
+                            const { modalMap } = getModalElements();
+                            if (modalMap) {
+                                copyMapDataset(element, modalMap);
+                                renderMiniMap(modalMap, payload);
+                            }
+                        }
+                    } catch (error) {
+                            // Si falla la red, mantenemos la última vista renderizada.
+                    }
+                }
+            };
+
+            const setupMiniMapEvents = () => {
+                document.addEventListener('click', (event) => {
+                    const target = event.target;
+                    if (!(target instanceof Element)) {
+                        return;
+                    }
+
+                    const expandButton = target.closest('[data-mini-map-expand]');
+                    if (expandButton) {
+                        const container = expandButton.closest('.mini-map[data-api-url]');
+                        if (container instanceof HTMLElement) {
+                            openMiniMapModal(container);
+                        }
+                        return;
+                    }
+
+                    const closeButton = target.closest('[data-mini-map-close]');
+                    if (closeButton) {
+                        closeMiniMapModal();
+                        return;
+                    }
+
+                    const modal = document.getElementById('mini-map-modal');
+                    if (modal && target === modal) {
+                        closeMiniMapModal();
+                    }
+                });
+
+                document.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        closeMiniMapModal();
+                    }
+                });
+            };
+
+            const initializeMiniMaps = async () => {
+                await loadGoogleMapsScript();
+                setupMiniMapEvents();
+                document.querySelectorAll('.mini-map[data-api-url]').forEach((element) => {
+                    if (element.id === 'mini-map-modal-map') {
+                        return;
+                    }
+                    renderMiniMap(element, null);
+                });
+                void updateMiniMaps();
+                setInterval(updateMiniMaps, 7000);
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initializeMiniMaps);
+            } else {
+                void initializeMiniMaps();
+            }
+        })();
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-900">
+
+    {% if user.is_authenticated %}
+    <nav class="bg-white text-gray-900 px-6 py-4 flex justify-between items-center border-b border-gray-200 shadow-sm">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-motorcycle text-2xl text-red-600"></i>
+            <span class="font-bold text-xl">Mensajería Integral</span>
+            {% if user.empresa %}
+            <span class="bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-700">{{ user.empresa.nombre }}</span>
+            {% endif %}
+            {% if user.rol %}
+            <span class="bg-gray-100 px-3 py-1 rounded-full text-sm capitalize text-gray-700">{{ user.rol }}</span>
+            {% endif %}
+        </div>
+        <div class="flex items-center gap-4">
+            <span class="text-sm text-gray-700">Hola, <strong class="text-gray-900">{{ user.username }}</strong></span>
+            <a href="{% url 'dashboard:logout' %}" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg text-sm transition text-white">
+                <i class="fas fa-sign-out-alt"></i> Cerrar sesión
+            </a>
+        </div>
+    </nav>
+    {% endif %}
+
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <div id="mini-map-modal" class="mini-map-modal" aria-hidden="true">
+        <div class="mini-map-modal__panel">
+            <div class="mini-map-modal__header">
+                <p class="mini-map-modal__title">Seguimiento en tiempo real</p>
+                <button type="button" class="mini-map-modal__close" data-mini-map-close>Cerrar</button>
+            </div>
+            <div
+                id="mini-map-modal-map"
+                class="mini-map mini-map--modal"
+                data-service-id=""
+            >
+                <div class="mini-map__canvas" aria-label="Mapa en tiempo real del servicio"></div>
+                <iframe
+                    class="mini-map__frame"
+                    title="Mapa de seguimiento del servicio"
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    allowfullscreen
+                ></iframe>
+                <div class="mini-map__fallback">Todavía no hay coordenadas para mostrar el mapa.</div>
+                <div class="mini-map__legend"></div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

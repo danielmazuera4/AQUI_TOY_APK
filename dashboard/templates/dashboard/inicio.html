@@ -1,0 +1,1676 @@
+{% extends 'dashboard/base.html' %}
+{% load l10n %}
+{% block title %}AKI TOY — Panel de Servicios{% endblock %}
+
+{% block content %}
+<div data-user-rol="{{ user.rol }}" id="page-data" style="display:none;"></div>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+  :root {
+    --rojo: #dc2626;
+    --fondo: #f8fafc;
+    --texto: #111827;
+    --borde: #e5e7eb;
+    --muted: #6b7280;
+    --card: #ffffff;
+  }
+
+  body { font-family: 'DM Sans', sans-serif; background: var(--fondo); color: var(--texto); }
+  .bebas { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.04em; }
+
+  /* ── HERO ── */
+  .hero {
+    background: var(--card);
+    border-radius: 20px;
+    padding: 36px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::after {
+    content: 'AKI TOY';
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 140px;
+    color: rgba(255,255,255,0.03);
+    position: absolute;
+    right: -10px;
+    bottom: -20px;
+    line-height: 1;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .hero-tag {
+    display: inline-block;
+    background: var(--rojo);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    padding: 4px 12px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  .hero-titulo {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(2rem, 4vw, 3rem);
+    color: var(--texto);
+    line-height: 1.05;
+  }
+  .hero-sub { font-size: 13px; color: var(--muted); margin-top: 8px; max-width: 420px; line-height: 1.6; }
+
+  .btn-nuevo {
+    background: var(--rojo);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 13px;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    transition: background 0.2s, transform 0.15s;
+    position: relative; z-index: 1;
+  }
+  .btn-nuevo:hover { background: #A50D25; transform: translateY(-2px); }
+
+  /* ── STATS ── */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stat {
+    background: var(--card);
+    border-radius: 16px;
+    border: 1.5px solid var(--borde);
+    padding: 20px 24px;
+    border-top: 4px solid transparent;
+  }
+  .stat.rojo-top { border-top-color: var(--rojo); }
+  .stat.black-top { border-top-color: #000000; }
+  .stat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+  .stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 52px; line-height: 1; margin-top: 4px; color: var(--texto); }
+  .stat.rojo-top .stat-num { color: var(--rojo); }
+  .stat.black-top .stat-num { color: #000000; }
+
+  /* ── TABLA ── */
+  .tabla-wrap {
+    background: var(--card);
+    border-radius: 20px;
+    border: 1.5px solid var(--borde);
+    overflow: hidden;
+  }
+  .tabla-head {
+    background: transparent;
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .tabla-head-titulo { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--texto); letter-spacing: 0.05em; }
+  .tabla-head-count { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { border-bottom: 2px solid var(--borde); }
+  thead th {
+    padding: 12px 20px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-align: left;
+  }
+  thead th:last-child { text-align: right; }
+
+  tbody tr { border-bottom: 1px solid var(--borde); transition: background 0.12s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #f3f4f6; }
+  td { padding: 14px 20px; vertical-align: middle; }
+  td:last-child { text-align: right; }
+
+  .orden-num { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--texto); }
+  .prioridad-alta { font-size: 9px; font-weight: 700; color: var(--rojo); text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-top: 1px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 0.75rem; font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .bg-warning { background: #facc15; }
+  .bg-info { background: #0ea5e9; }
+  .bg-secondary { background: #6b7280; }
+  .bg-success { background: #16a34a; }
+  .bg-danger { background: #dc2626; }
+  .bg-light { background: #f3f4f6; }
+  .text-dark { color: #111827; }
+  .text-white { color: #ffffff; }
+
+  .ruta-line { font-size: 12px; color: var(--texto); font-weight: 500; }
+  .ruta-line + .ruta-line { color: var(--muted); font-weight: 400; margin-top: 3px; }
+
+  .dashboard-shell {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .dashboard-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dashboard-table {
+    width: 100%;
+    min-width: 920px;
+  }
+
+  .dashboard-truncate {
+    display: block;
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .control-bar {
+    display: grid;
+    gap: 12px;
+    margin-top: 6px;
+  }
+
+  .search-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    background: var(--card);
+    border: 1.5px solid var(--borde);
+    border-radius: 16px;
+    padding: 14px;
+  }
+
+  .search-input {
+    flex: 1 1 320px;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: var(--texto);
+    background: #fff;
+    outline: none;
+  }
+
+  .search-input:focus {
+    border-color: var(--rojo);
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+  }
+
+  .search-button {
+    border: none;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    background: var(--rojo);
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  .search-button:hover {
+    background: #b91c1c;
+    transform: translateY(-1px);
+  }
+
+  .tabs-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .tab-button {
+    border: 1.5px solid var(--borde);
+    background: #fff;
+    border-radius: 14px;
+    padding: 14px 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .tab-button.active {
+    border-color: var(--rojo);
+    box-shadow: 0 12px 30px rgba(220, 38, 38, 0.12);
+  }
+
+  .tab-title {
+    display: block;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--texto);
+  }
+
+  .tab-subtitle {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .panel-stack {
+    display: grid;
+    gap: 14px;
+  }
+
+  .panel-section {
+    background: var(--card);
+    border: 1.5px solid var(--borde);
+    border-radius: 20px;
+    padding: 18px;
+  }
+
+  .panel-section.hidden-panel {
+    display: none;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+
+  .panel-head h3 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 24px;
+    color: var(--texto);
+    letter-spacing: 0.05em;
+  }
+
+  .panel-count {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+
+  .service-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+  }
+
+  .service-card {
+    border: 1.5px solid var(--borde);
+    border-radius: 18px;
+    background: #fff;
+    padding: 16px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .service-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  }
+  .service-card.selected {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
+  }
+
+  .service-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .service-card-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 28px;
+    line-height: 1;
+    color: var(--texto);
+  }
+
+  .service-card-meta {
+    display: grid;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--texto);
+  }
+
+  .service-card-route {
+    display: grid;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .service-card-actions {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .historial-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .hito-item {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: start;
+    padding: 14px;
+    border: 1.5px solid var(--borde);
+    border-radius: 16px;
+    background: #fff;
+  }
+
+  .hito-item:last-child {
+    border-color: rgba(220, 38, 38, 0.18);
+    background: #fffafa;
+  }
+
+  .hito-main {
+    display: grid;
+    gap: 6px;
+  }
+
+  .hito-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .hito-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--rojo);
+    background: rgba(220, 38, 38, 0.08);
+  }
+
+  .hito-delete {
+    border: none;
+    background: #dc2626;
+    color: #fff;
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+
+  .hito-delete:hover {
+    background: #b91c1c;
+    transform: translateY(-1px);
+  }
+
+  .service-empty {
+    border: 1.5px dashed var(--borde);
+    border-radius: 16px;
+    padding: 18px;
+    color: var(--muted);
+    font-size: 13px;
+    background: #fafafa;
+  }
+
+  .btn-ver {
+    background: var(--rojo);
+    color: white;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.2s;
+  }
+  .btn-ver:hover { background: #b91c1c; }
+
+  /* ── MODAL ── */
+  .overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.45);
+    display: none; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .overlay.on { display: flex; }
+
+  .modal {
+    background: var(--card);
+    width: min(100%, 64rem);
+    max-width: 64rem;
+    border-radius: 24px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    max-height: 92vh;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.4);
+    animation: popIn 0.22s cubic-bezier(.22,.68,0,1.15);
+  }
+  @keyframes popIn {
+    from { opacity:0; transform: scale(0.95) translateY(12px); }
+    to   { opacity:1; transform: scale(1) translateY(0); }
+  }
+
+  .m-header {
+    background: var(--card);
+    padding: 22px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .m-titulo { font-family: 'Bebas Neue', sans-serif; font-size: 26px; color: var(--texto); }
+  .m-sub { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin-top: 2px; }
+  .m-close {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #f1f5f9; border: none;
+    color: var(--texto); cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  .m-close:hover { background: var(--rojo); color: white; }
+
+  .m-body {
+    flex: 1; overflow-y: auto;
+    padding: 20px;
+    background: #f9fafb;
+  }
+
+  .m-card {
+    background: var(--card);
+    border-radius: 14px;
+    border: 1.5px solid var(--borde);
+    padding: 16px 18px;
+  }
+  .m-card-full { grid-column: 1 / -1; }
+  .m-card-label {
+    font-size: 9px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: var(--muted); margin-bottom: 12px;
+  }
+  .m-row { margin-bottom: 10px; }
+  .m-row:last-child { margin-bottom: 0; }
+  .m-key { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .m-val { font-size: 13px; font-weight: 600; color: var(--texto); margin-top: 2px; }
+  .m-val.red { color: var(--rojo); }
+
+  /* Mensajero pill */
+  .mensajero-pill {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card);
+    border-radius: 12px; padding: 12px 14px; margin-top: 12px;
+    border: 1px solid var(--borde);
+  }
+  .m-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--rojo); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Bebas Neue', sans-serif; font-size: 18px;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .m-avatar img { width:100%; height:100%; object-fit:cover; }
+  .m-nombre { font-weight: 700; color: var(--texto); font-size: 14px; }
+  .m-rol { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  .no-mensajero {
+    background: #fff7f7; border: 1.5px solid rgba(220,38,38,0.12);
+    border-radius: 12px; padding: 12px 14px; margin-top: 12px;
+    font-size: 12px; font-weight: 600; color: var(--rojo);
+  }
+
+  /* Seguimiento */
+  .seg-list { display: flex; flex-direction: column; gap: 8px; }
+  .seg-item {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 1.5px solid var(--borde);
+    border-radius: 10px; padding: 10px 14px;
+  }
+  .seg-dot {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--borde); color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+  }
+  .seg-dot.ok { background: var(--negro); color: white; }
+  .seg-desc { font-size: 12px; font-weight: 600; color: var(--texto); }
+  .seg-state { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .seg-state.ok { color: #28A745; }
+
+  /* Mapa */
+  .mapa-box {
+    border-radius: 12px; overflow: hidden;
+    border: 1.5px solid var(--borde);
+    height: 240px; background: var(--card);
+    position: relative;
+  }
+  .mapa-box iframe { width:100%; height:100%; border:none; }
+  .mapa-placeholder {
+    width:100%; height:100%;
+    display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    gap:8px; color:var(--muted); font-size:12px;
+  }
+  .mapa-placeholder i { font-size:32px; color:#CCC; }
+  .mapa-tag {
+    position:absolute; top:10px; left:10px;
+    background:var(--negro); color:white;
+    font-size:9px; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.12em;
+    padding:4px 10px; border-radius:999px;
+  }
+
+  /* Evidencias */
+  .ev-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .ev-card { border-radius:10px; overflow:hidden; border:1.5px solid var(--borde); }
+  .ev-card img { width:100%; height:90px; object-fit:cover; }
+  .ev-info { padding:7px 10px; background:white; }
+  .ev-paso { font-size:9px; font-weight:700; color:var(--rojo); text-transform:uppercase; }
+  .ev-desc { font-size:10px; color:var(--muted); margin-top:1px; }
+  .no-data { font-size:12px; color:var(--muted); font-style:italic; }
+
+  .m-footer {
+    padding: 16px 20px;
+    border-top:1.5px solid var(--borde);
+    background:var(--card);
+    display:flex; align-items:center; justify-content:flex-end; gap:8px;
+    flex-shrink:0;
+  }
+  .btn-cerrar-f {
+    padding:9px 20px; border-radius:10px;
+    font-weight:700; font-size:12px;
+    border:1.5px solid var(--borde);
+    background:#ffffff; color:var(--texto);
+    cursor:pointer; transition:background 0.15s;
+  }
+  .btn-cerrar-f:hover { background:#f3f4f6; }
+  .btn-editar-f {
+    padding:9px 20px; border-radius:10px;
+    font-weight:700; font-size:12px;
+    background:var(--rojo); color:white;
+    border:none; cursor:pointer;
+    text-decoration:none;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:background 0.15s;
+  }
+  .btn-editar-f:hover { background:#b91c1c; }
+  .btn-revertir-f {
+    padding:9px 20px; border-radius:10px;
+    font-weight:700; font-size:12px;
+    background:var(--rojo); color:white;
+    border:none; cursor:pointer;
+    text-decoration:none;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:background 0.15s;
+  }
+  .btn-revertir-f:hover { background:#b91c1c; }
+
+  .spinner {
+    width:32px; height:32px;
+    border:3px solid var(--borde);
+    border-top-color:var(--rojo);
+    border-radius:50%;
+    animation:spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading { display:flex; align-items:center; justify-content:center; height:180px; grid-column:1/-1; }
+
+  .m-body::-webkit-scrollbar { width:5px; }
+  .m-body::-webkit-scrollbar-thumb { background:var(--borde); border-radius:3px; }
+  .invisible { visibility: hidden; }
+</style>
+
+<div class="dashboard-shell flex flex-col gap-3 md:gap-4">
+
+  <!-- Hero -->
+  <div class="hero flex flex-col items-start justify-between gap-3 lg:flex-row lg:items-center lg:gap-4">
+    <div class="position-relative flex-grow-1" style="z-index:1; min-width: 0;">
+      <span class="hero-tag">Mensajería Integral</span>
+      <div class="hero-titulo">AKI TOY<br>Mensajería Integral</div>
+      <p class="hero-sub">Gestiona y monitorea todos los servicios de tu operación en tiempo real.</p>
+    </div>
+    {% if puede_gestionar_servicios %}
+    <a href="{% url 'dashboard:crear_servicio' %}" class="btn-nuevo self-start flex-shrink-0 lg:self-center">
+      <i class="fas fa-plus"></i> Nuevo Servicio
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Stats -->
+  <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div>
+      <div class="stat black-top h-100">
+        <div class="stat-label">Disponibles</div>
+        <div class="stat-num">{{ disponibles }}</div>
+      </div>
+    </div>
+    <div>
+      <div class="stat black-top h-100">
+        <div class="stat-label">En progreso</div>
+        <div class="stat-num">{{ en_progreso }}</div>
+      </div>
+    </div>
+    <div>
+      <div class="stat black-top h-100">
+        <div class="stat-label">Terminados</div>
+        <div class="stat-num">{{ terminados }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Control y paneles -->
+  <div class="control-bar">
+    <div class="search-strip">
+      <input id="service-search-input" class="search-input" type="search" placeholder="Buscar por número de servicio o ID..." aria-label="Buscar número de servicio" />
+      <button id="service-search-button" type="button" class="search-button">Buscar</button>
+    </div>
+
+    <div id="dashboard-feedback" class="alert alert-danger d-none mb-0" role="alert"></div>
+
+    <div class="tabs-strip">
+      <button type="button" class="tab-button active" data-panel-target="panel-disponibles">
+        <span class="tab-title">Sin Asignar / Disponibles</span>
+        <span class="tab-subtitle">{{ disponibles }} servicio{{ disponibles|pluralize }}</span>
+      </button>
+      <button type="button" class="tab-button" data-panel-target="panel-progreso">
+        <span class="tab-title">Mensajeros Asignados</span>
+        <span class="tab-subtitle">{{ en_progreso }} servicio{{ en_progreso|pluralize }}</span>
+      </button>
+      <button type="button" class="tab-button" data-panel-target="panel-terminados">
+        <span class="tab-title">Completados / Finalizados</span>
+        <span class="tab-subtitle">{{ terminados }} servicio{{ terminados|pluralize }}</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-stack">
+    <section id="panel-disponibles" class="panel-section" data-panel-section>
+      <div class="panel-head">
+        <h3>Sin Asignar / Disponibles</h3>
+        <span class="panel-count">{{ servicios_disponibles|length }} servicio{{ servicios_disponibles|length|pluralize }}</span>
+      </div>
+      <div class="service-grid">
+        {% for s in servicios_disponibles %}
+        <article class="service-card" data-service-card data-service-id="{{ s.id }}" data-service-order="{{ s.orden }}">
+          <div class="service-card-header">
+            <div>
+              <div class="service-card-title">#{{ s.orden }}</div>
+              <div class="prioridad-alta {% if s.prioridad != 'alta' %}invisible{% endif %}">● Alta prioridad</div>            </div>
+            <span class="badge bg-warning text-dark">Sin Mensajero</span>
+          </div>
+          <div class="service-card-route">
+            <span><i class="fas fa-arrow-up" style="color:var(--rojo);margin-right:6px;"></i>{{ s.origen|truncatechars:62 }}</span>
+            <span><i class="fas fa-arrow-down" style="margin-right:6px;"></i>{{ s.destino|truncatechars:62 }}</span>
+          </div>
+          <div class="service-card-meta">
+            <span><strong>Solicitante:</strong> {{ s.nombre_solicitante|default:"-" }}</span>
+            <span><strong>Vehículo:</strong> {{ s.tipo_vehiculo|default:"-" }}</span>
+          </div>
+          <div class="service-card-actions">
+            <button class="btn-ver" type="button" onclick="abrirModal('{{ s.id }}')"><i class="fas fa-eye"></i> Ver</button>
+          </div>
+        </article>
+        {% empty %}
+        <div class="service-empty">No hay servicios disponibles para asignación.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section id="panel-progreso" class="panel-section hidden-panel" data-panel-section>
+      <div class="panel-head">
+        <h3>Mensajeros Asignados</h3>
+        <span class="panel-count">{{ servicios_en_progreso|length }} servicio{{ servicios_en_progreso|length|pluralize }}</span>
+      </div>
+      <div class="service-grid">
+        {% for s in servicios_en_progreso %}
+        <article class="service-card" data-service-card data-service-id="{{ s.id }}" data-service-order="{{ s.orden }}">
+          <div class="service-card-header">
+            <div>
+              <div class="service-card-title">#{{ s.orden }}</div>
+              <div class="prioridad-alta {% if s.prioridad != 'alta' %}invisible{% endif %}">● Alta prioridad</div>            </div>
+            <span class="badge bg-info text-white">Mensajero Asignado</span>
+          </div>
+          <div class="service-card-route">
+            <span><i class="fas fa-arrow-up" style="color:var(--rojo);margin-right:6px;"></i>{{ s.origen|truncatechars:62 }}</span>
+            <span><i class="fas fa-arrow-down" style="margin-right:6px;"></i>{{ s.destino|truncatechars:62 }}</span>
+          </div>
+          <div class="service-card-meta">
+            <span><strong>Solicitante:</strong> {{ s.nombre_solicitante|default:"-" }}</span>
+            <span><strong>Mensajero:</strong> {{ s.mensajero.username|default:"Asignado" }}</span>
+          </div>
+          <div class="service-card-actions">
+            <button class="btn-ver" type="button" onclick="abrirModal('{{ s.id }}')"><i class="fas fa-eye"></i> Ver</button>
+          </div>
+        </article>
+        {% empty %}
+        <div class="service-empty">No hay servicios en progreso.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section id="panel-terminados" class="panel-section hidden-panel" data-panel-section>
+      <div class="panel-head">
+        <h3>Completados / Finalizados</h3>
+        <span class="panel-count">{{ servicios_terminados|length }} servicio{{ servicios_terminados|length|pluralize }}</span>
+      </div>
+      <div class="service-grid">
+        {% for s in servicios_terminados %}
+        <article class="service-card" data-service-card data-service-id="{{ s.id }}" data-service-order="{{ s.orden }}">
+          <div class="service-card-header">
+            <div>
+              <div class="service-card-title">#{{ s.orden }}</div>
+              <div class="prioridad-alta {% if s.prioridad != 'alta' %}invisible{% endif %}">● Alta prioridad</div>
+            </div>
+            <span class="badge bg-success text-white">Completado</span>
+          </div>
+          <div class="service-card-route">
+            <span><i class="fas fa-arrow-up" style="color:var(--rojo);margin-right:6px;"></i>{{ s.origen|truncatechars:62 }}</span>
+            <span><i class="fas fa-arrow-down" style="margin-right:6px;"></i>{{ s.destino|truncatechars:62 }}</span>
+          </div>
+          <div class="service-card-meta">
+            <span><strong>Solicitante:</strong> {{ s.nombre_solicitante|default:"-" }}</span>
+            <span><strong>Mensajero:</strong> {{ s.mensajero.username|default:"-" }}</span>
+          </div>
+          <div class="service-card-actions">
+            <button class="btn-ver" type="button" onclick="abrirModal('{{ s.id }}')"><i class="fas fa-eye"></i> Ver</button>
+          </div>
+        </article>
+        {% empty %}
+        <div class="service-empty">No hay servicios finalizados.</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+</div>
+
+<!-- ══ MODAL ══ -->
+<div id="overlay" class="overlay" onclick="if(event.target===this)cerrarModal()">
+  <div class="modal w-full max-w-5xl bg-gray-50">
+
+    <div class="m-header border-b border-gray-200 bg-white px-5 py-4 sm:px-6">
+      <div>
+        <div id="m-titulo" class="m-titulo text-gray-900">Cargando...</div>
+        <div id="m-sub" class="m-sub text-gray-500"></div>
+      </div>
+      <button class="m-close" onclick="cerrarModal()"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="m-body" id="m-body">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+
+    <div class="m-footer border-t border-gray-200 bg-white px-5 py-4 sm:px-6">
+      {% if user.is_staff %}
+      <a id="m-editar" href="#" class="btn-editar-f" style="display:none;">
+        <i class="fas fa-pen"></i> Editar
+      </a>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+
+<div id="evidence-lightbox" class="fixed inset-0 z-[300] hidden items-center justify-center bg-gray-100/80 px-4 py-6">
+  <div class="relative flex w-full max-w-5xl items-center justify-center">
+    <button id="evidence-lightbox-close" type="button" class="absolute -top-12 right-0 rounded-full bg-white px-4 py-2 font-bold text-gray-900 shadow-md transition hover:bg-gray-100">
+      Cerrar
+    </button>
+    <img id="evidence-lightbox-image" src="" alt="Evidencia ampliada" loading="lazy" class="max-h-[85vh] max-w-full rounded-2xl border border-gray-200 bg-white object-contain shadow-2xl" />
+  </div>
+</div>
+
+
+
+<div id="mensajero-modal" class="fixed inset-0 z-[290] hidden items-center justify-center bg-gray-100/70 px-4 py-6">
+  <div class="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Mensajero asignado</p>
+        <h3 id="mensajero-modal-name" class="mt-1 text-xl font-bold text-gray-900">Sin mensajero</h3>
+      </div>
+      <button type="button" class="rounded-full bg-gray-100 px-3 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-200" data-mensajero-close>
+        Cerrar
+      </button>
+    </div>
+    <div class="mt-4 rounded-2xl bg-gray-50 p-4">
+      <div class="flex items-center gap-4">
+        <div id="mensajero-modal-avatar" class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-red-600 text-lg font-bold text-white">
+          M
+        </div>
+        <div class="min-w-0 space-y-2 text-sm text-gray-600">
+          <div>
+            <span class="font-semibold text-gray-900">Placa / ID:</span>
+            <span id="mensajero-modal-placa">No registrada</span>
+          </div>
+          <div>
+            <span class="font-semibold text-gray-900">Teléfono:</span>
+            <span id="mensajero-modal-telefono">No registrado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Asignación/Reasignación -->
+<div id="asignacion-modal" class="fixed inset-0 z-[295] hidden items-center justify-center bg-gray-100/70 px-4 py-6">
+  <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+    <div class="flex items-start gap-4">
+      <div>
+        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Gestión de Mensajero</p>
+        <h3 id="asignacion-modal-title" class="mt-1 text-xl font-bold text-gray-900">Asignar Servicio</h3>
+        <p id="asignacion-modal-subtitle" class="mt-1 text-sm text-gray-500">Orden #<span id="asignacion-modal-orden"></span></p>
+      </div>
+    </div>
+    <div class="mt-5 space-y-4">
+      <div>
+        <label for="asignacion-mensajero-select" class="block text-sm font-semibold text-gray-700 mb-2">Seleccionar Mensajero:</label>
+        <select id="asignacion-mensajero-select" class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-500/20">
+          <option value="">Cargando mensajeros...</option>
+        </select>
+      </div>
+      <button id="asignacion-modal-confirm" type="button" class="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
+        Confirmar Asignación
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Confirmación para Eliminar Hito -->
+<div id="modalConfirmarEliminarHito" class="fixed inset-0 z-[300] hidden items-center justify-center bg-gray-100/70 px-4 py-6">
+  <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+    <div class="flex items-start gap-4">
+      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
+        <i class="fas fa-trash text-red-600 text-lg"></i>
+      </div>
+      <div class="flex-1">
+        <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Confirmar Eliminación</p>
+        <h3 class="mt-1 text-xl font-bold text-gray-900">¿Seguro que deseas realizar esta acción?</h3>
+        <p class="mt-2 text-sm text-gray-600">Esta acción eliminará el último hito del servicio. Esta acción no se puede deshacer.</p>
+      </div>
+    </div>
+    <div class="mt-6 flex gap-3">
+      <button id="btnCancelarEliminarHito" type="button" class="flex-1 rounded-2xl border border-gray-300 bg-white px-5 py-3 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+        Cancelar
+      </button>
+      <button id="btnConfirmarEliminarHito" type="button" class="flex-1 rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700">
+        Sí, eliminar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SERVICIO_DATA_URL_TEMPLATE = "{% url 'dashboard:get_servicio_data' 0 %}";
+const SERVICIO_ELIMINAR_HITO_URL_TEMPLATE = "/api/servicios/0/eliminar-hito/";
+const SERVICIO_REASIGNAR_URL_TEMPLATE = "/api/servicios/0/reasignar/";
+
+const pageData = document.getElementById('page-data');
+const IS_COORDINADOR = pageData ? pageData.dataset.userRol === 'coordinador' : false;
+
+let servicioActivoId = null;
+let servicioSeleccionadoData = null;
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+}[char] || char));
+
+const updateBodyScrollLock = () => {
+  const overlay = document.getElementById('overlay');
+  const messengerModal = document.getElementById('mensajero-modal');
+  const mainOpen = overlay?.classList.contains('on');
+  const messengerOpen = messengerModal && !messengerModal.classList.contains('hidden');
+  document.body.style.overflow = (mainOpen || messengerOpen) ? 'hidden' : '';
+};
+
+const getCookie = (name) => {
+  const cookies = document.cookie ? document.cookie.split('; ') : [];
+  for (const cookie of cookies) {
+    const separatorIndex = cookie.indexOf('=');
+    const cookieName = separatorIndex >= 0 ? cookie.slice(0, separatorIndex) : cookie;
+    if (cookieName === name) {
+      return decodeURIComponent(cookie.slice(separatorIndex + 1));
+    }
+  }
+  return null;
+};
+
+async function leerMensajeError(response) {
+  const raw = await response.text();
+  if (!raw) {
+    return `HTTP ${response.status}`;
+  }
+
+  try {
+    const payload = JSON.parse(raw);
+    return payload.error || payload.detail || payload.message || raw;
+  } catch (_) {
+    return raw;
+  }
+}
+
+// Función para cargar mensajeros en el modal de asignación
+async function cargarMensajerosEnModal() {
+  const select = document.getElementById('asignacion-mensajero-select');
+  if (!select) return;
+
+  select.innerHTML = '';
+  select.appendChild(new Option('Cargando mensajeros...', ''));
+
+  try {
+    const response = await fetch('/api/usuarios/mensajeros/activos/', { credentials: 'same-origin' });
+    if (!response.ok) {
+      throw new Error(await leerMensajeError(response));
+    }
+
+    const mensajeros = await response.json();
+    if (!Array.isArray(mensajeros) || mensajeros.length === 0) {
+      select.innerHTML = '';
+      select.appendChild(new Option('No hay mensajeros activos', ''));
+      return;
+    }
+
+    select.innerHTML = '';
+    select.appendChild(new Option('Selecciona un mensajero', ''));
+    for (const mensajero of mensajeros) {
+      const option = document.createElement('option');
+      option.value = String(mensajero.id);
+      option.textContent = mensajero.nombre_completo || mensajero.username;
+      select.appendChild(option);
+    }
+  } catch (error) {
+    console.warn('No se pudieron cargar los mensajeros activos:', error);
+    select.innerHTML = '';
+    select.appendChild(new Option('No se pudieron cargar los mensajeros', ''));
+  }
+}
+
+// Función para abrir el modal de asignación/reasignación
+function abrirModalAsignacion(servicio) {
+  const modal = document.getElementById('asignacion-modal');
+  const title = document.getElementById('asignacion-modal-title');
+  const ordenSpan = document.getElementById('asignacion-modal-orden');
+  const confirmButton = document.getElementById('asignacion-modal-confirm');
+
+  if (!modal || !title || !ordenSpan || !confirmButton) return;
+
+  servicioSeleccionadoData = servicio;
+  ordenSpan.textContent = servicio.orden || servicio.id;
+
+  const tieneMensajero = Boolean(servicio?.mensajero || servicio?.mensajero_id);
+  
+  if (tieneMensajero) {
+    title.textContent = 'Reasignar Servicio';
+    confirmButton.textContent = 'Confirmar Reasignación';
+  } else {
+    title.textContent = 'Asignar a Mensajero';
+    confirmButton.textContent = 'Confirmar Asignación';
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  updateBodyScrollLock();
+
+  void cargarMensajerosEnModal();
+}
+
+// Función para cerrar el modal de asignación
+function cerrarModalAsignacion() {
+  const modal = document.getElementById('asignacion-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  servicioSeleccionadoData = null;
+  
+  // Desmarcar la tarjeta del servicio (quitar color verde de selección)
+  document.querySelectorAll('[data-service-card]').forEach((card) => {
+    card.classList.remove('selected');
+  });
+  
+  updateBodyScrollLock();
+}
+
+// Función para confirmar la asignación/reasignación
+async function confirmarAsignacion() {
+  if (!servicioSeleccionadoData) return;
+
+  const select = document.getElementById('asignacion-mensajero-select');
+  const mensajeroId = select?.value;
+
+  if (!mensajeroId) {
+    mostrarFeedback('Debes seleccionar un mensajero', 'warning');
+    return;
+  }
+
+  const confirmButton = document.getElementById('asignacion-modal-confirm');
+  if (confirmButton) {
+    confirmButton.disabled = true;
+  }
+
+  try {
+    const url = SERVICIO_REASIGNAR_URL_TEMPLATE.replace('/0/', `/${servicioSeleccionadoData.id}/`);
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken') || '',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mensajero_id: mensajeroId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(await leerMensajeError(response));
+    }
+
+    ocultarFeedback();
+    cerrarModalAsignacion();
+    
+    // Recargar la página para mostrar los cambios
+    location.reload();
+  } catch (error) {
+    const message = error?.message || 'No se pudo asignar el servicio';
+    console.warn(message, error);
+    mostrarFeedback(message, 'danger');
+  } finally {
+    if (confirmButton) {
+      confirmButton.disabled = false;
+    }
+  }
+}
+
+// Función para manejar la selección de servicios
+function inicializarSeleccionServicios() {
+  document.querySelectorAll('[data-service-card]').forEach((card) => {
+    card.addEventListener('click', async (event) => {
+      // Si el clic fue en el botón "Ver", no abrir el modal de asignación
+      if (event.target.closest('.btn-ver')) {
+        return;
+      }
+
+      // Remover selección anterior
+      document.querySelectorAll('[data-service-card]').forEach((c) => {
+        c.classList.remove('selected');
+      });
+
+      // Agregar selección actual
+      card.classList.add('selected');
+
+      // Obtener datos del servicio
+      const servicioId = card.dataset.serviceId;
+      const servicioOrden = card.dataset.serviceOrder;
+
+      try {
+        const url = SERVICIO_DATA_URL_TEMPLATE.replace('/0/', `/${servicioId}/`);
+        const response = await fetch(url, { credentials: 'same-origin' });
+        if (!response.ok) {
+          throw new Error(await leerMensajeError(response));
+        }
+        const servicio = await response.json();
+
+        // Solo abrir modal de asignación si no está terminado
+        if (servicio.estado !== 'terminado') {
+          abrirModalAsignacion(servicio);
+        } else {
+          mostrarFeedback('No se pueden asignar servicios terminados', 'warning');
+          card.classList.remove('selected');
+        }
+      } catch (error) {
+        console.warn('Error al cargar datos del servicio:', error);
+        card.classList.remove('selected');
+      }
+    });
+  });
+}
+
+
+function actualizarPanelActivo(panelId) {
+  document.querySelectorAll('[data-panel-section]').forEach((section) => {
+    section.classList.toggle('hidden-panel', section.id !== panelId);
+  });
+
+  document.querySelectorAll('[data-panel-target]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.panelTarget === panelId);
+  });
+}
+
+function filtrarServiciosDashboard() {
+  const input = document.getElementById('service-search-input');
+  const query = (input?.value || '').trim().toLowerCase();
+
+  document.querySelectorAll('[data-service-card]').forEach((card) => {
+    const serviceId = (card.dataset.serviceId || '').toLowerCase();
+    const serviceOrder = (card.dataset.serviceOrder || '').toLowerCase();
+    const visible = !query || serviceId.includes(query) || serviceOrder.includes(query);
+    card.style.display = visible ? '' : 'none';
+  });
+}
+
+function inicializarDashboardPaneles() {
+  const tabButtons = document.querySelectorAll('[data-panel-target]');
+  const searchInput = document.getElementById('service-search-input');
+  const searchButton = document.getElementById('service-search-button');
+
+  tabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      actualizarPanelActivo(button.dataset.panelTarget);
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', filtrarServiciosDashboard);
+  }
+
+  if (searchButton) {
+    searchButton.addEventListener('click', filtrarServiciosDashboard);
+  }
+
+  actualizarPanelActivo('panel-disponibles');
+  filtrarServiciosDashboard();
+
+  // Inicializar selección de servicios
+  inicializarSeleccionServicios();
+
+  // Inicializar modal de asignación
+  const asignacionModalConfirm = document.getElementById('asignacion-modal-confirm');
+  if (asignacionModalConfirm) {
+    asignacionModalConfirm.addEventListener('click', confirmarAsignacion);
+  }
+
+  const asignacionModal = document.getElementById('asignacion-modal');
+  if (asignacionModal) {
+    asignacionModal.addEventListener('click', (event) => {
+      if (event.target === asignacionModal) {
+        cerrarModalAsignacion();
+      }
+    });
+  }
+}
+
+inicializarDashboardPaneles();
+
+function mostrarFeedback(mensaje, tipo = 'danger') {
+  const feedback = document.getElementById('dashboard-feedback');
+  if (!feedback) return;
+  feedback.className = `alert alert-${tipo} mb-0`;
+  feedback.textContent = mensaje;
+  feedback.classList.remove('d-none');
+}
+
+function ocultarFeedback() {
+  const feedback = document.getElementById('dashboard-feedback');
+  if (!feedback) return;
+  feedback.classList.add('d-none');
+  feedback.textContent = '';
+}
+
+function abrirModalConfirmarEliminarHito() {
+  const modalElement = document.getElementById('modalConfirmarEliminarHito');
+  if (!modalElement) return;
+  modalElement.classList.remove('hidden');
+  modalElement.classList.add('flex');
+  updateBodyScrollLock();
+}
+
+function cerrarModalConfirmarEliminarHito() {
+  const modalElement = document.getElementById('modalConfirmarEliminarHito');
+  if (!modalElement) return;
+  modalElement.classList.add('hidden');
+  modalElement.classList.remove('flex');
+  updateBodyScrollLock();
+}
+
+const btnConfirmarEliminarHito = document.getElementById('btnConfirmarEliminarHito');
+if (btnConfirmarEliminarHito) {
+  btnConfirmarEliminarHito.addEventListener('click', () => {
+    void ejecutarReversionConfirmada();
+  });
+}
+
+const btnCancelarEliminarHito = document.getElementById('btnCancelarEliminarHito');
+if (btnCancelarEliminarHito) {
+  btnCancelarEliminarHito.addEventListener('click', () => {
+    cerrarModalConfirmarEliminarHito();
+  });
+}
+
+const modalConfirmarEliminarHito = document.getElementById('modalConfirmarEliminarHito');
+if (modalConfirmarEliminarHito) {
+  modalConfirmarEliminarHito.addEventListener('click', (event) => {
+    if (event.target === modalConfirmarEliminarHito) {
+      cerrarModalConfirmarEliminarHito();
+    }
+  });
+}
+
+async function confirmarYRevertirHito() {
+  if (!servicioActivoId) return;
+  ocultarFeedback();
+  abrirModalConfirmarEliminarHito();
+}
+
+async function ejecutarReversionConfirmada() {
+  if (!servicioActivoId) return;
+
+  try {
+    const url = SERVICIO_ELIMINAR_HITO_URL_TEMPLATE.replace('/0/', `/${servicioActivoId}/`);
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken') || '',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    });
+
+    if (!response.ok) {
+      throw new Error(await leerMensajeError(response));
+    }
+
+    cerrarModalConfirmarEliminarHito();
+    cerrarModal();
+    
+    // Recargar la página para reflejar los cambios en los contadores y pestañas
+    location.reload();
+  } catch (error) {
+    const message = error?.message || 'No se pudo eliminar el último hito';
+    console.warn(message, error);
+    mostrarFeedback(message, 'danger');
+  }
+}
+
+
+const closeMessengerModal = () => {
+  const messengerModal = document.getElementById('mensajero-modal');
+  if (!messengerModal) return;
+  messengerModal.classList.add('hidden');
+  messengerModal.classList.remove('flex');
+  updateBodyScrollLock();
+};
+
+const openMessengerModal = (mensajero) => {
+  const messengerModal = document.getElementById('mensajero-modal');
+  if (!messengerModal || !mensajero) return;
+
+  const name = mensajero.nombre_completo || mensajero.username || 'Mensajero';
+  const initials = (name || 'M').trim().charAt(0).toUpperCase();
+  const avatar = document.getElementById('mensajero-modal-avatar');
+
+  document.getElementById('mensajero-modal-name').textContent = name;
+  document.getElementById('mensajero-modal-placa').textContent = mensajero.placa || mensajero.username || 'No registrada';
+  document.getElementById('mensajero-modal-telefono').textContent = mensajero.telefono || 'No registrado';
+
+  if (avatar) {
+    if (mensajero.foto_perfil) {
+      avatar.innerHTML = `<img src="${escapeHtml(mensajero.foto_perfil)}" alt="${escapeHtml(name)}" loading="lazy" class="h-full w-full object-cover">`;
+    } else {
+      avatar.textContent = initials;
+    }
+  }
+
+  messengerModal.classList.remove('hidden');
+  messengerModal.classList.add('flex');
+  updateBodyScrollLock();
+};
+
+async function abrirModal(id) {
+  const overlay = document.getElementById('overlay');
+  const body    = document.getElementById('m-body');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  overlay.classList.add('on');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const url = SERVICIO_DATA_URL_TEMPLATE.replace('/0/', `/${id}/`);
+    const res  = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) {
+      const detail = await res.text();
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    const d    = await res.json();
+    servicioActivoId = String(id);
+
+    document.getElementById('m-titulo').textContent = `Orden #${d.orden}`;
+    document.getElementById('m-sub').textContent    = d.estado_display || d.estado;
+
+    const ed = document.getElementById('m-editar');
+    if (ed) {
+      ed.href = `/servicio/${id}/editar/`;
+      ed.style.display = d.estado === 'terminado' ? 'none' : 'inline-flex';
+    }
+
+    // Badge estado
+    const badgeMap = {
+      sin_asignar: '<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">Sin asignar</span>',
+      disponible: '<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800">Disponible</span>',
+      en_progreso: '<span class="inline-flex items-center rounded-full bg-gray-200 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-gray-800">En progreso</span>',
+      terminado:   '<span class="inline-flex items-center rounded-full bg-gray-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white">Terminado</span>',
+    };
+
+    const serviceGridItem = (label, value, accent = false) => `
+      <div class="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3">
+        <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">${escapeHtml(label)}</p>
+        <p class="mt-1 text-sm font-semibold ${accent ? 'text-red-600' : 'text-gray-900'}">${escapeHtml(value || '-')}</p>
+      </div>`;
+
+    const toTime = (fecha) => {
+      if (!fecha) return 0;
+      const parsed = new Date(fecha).getTime();
+      return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const seguimientos = (d.seguimientos || []).map((item) => ({
+      ...item,
+      tipo: 'seguimiento',
+      ordenTemporal: toTime(item.fecha),
+    }));
+    const novedades = (d.novedades || []).map((item) => ({
+      ...item,
+      tipo: 'novedad',
+      ordenTemporal: toTime(item.fecha),
+    }));
+    const historialHitos = [...seguimientos].sort((a, b) => {
+      if (a.ordenTemporal !== b.ordenTemporal) {
+        return a.ordenTemporal - b.ordenTemporal;
+      }
+      return (a.id || 0) - (b.id || 0);
+    });
+
+    const mapaHTML = `
+      <div class="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div class="absolute left-4 top-4 z-10 inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-white shadow-lg">
+          <i class="fas fa-map-pin"></i> Ubicación en vivo
+        </div>
+        <div id="map-container" class="h-64 w-full lg:h-72"></div>
+      </div>`;
+
+    const mensajeroHTML = d.mensajero
+      ? `
+        <button type="button" data-mensajero-open class="group w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:shadow-md">
+          <div class="flex items-start gap-4">
+            <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-red-600 text-lg font-bold text-white">
+              ${d.mensajero.foto_perfil ? `<img src="${escapeHtml(d.mensajero.foto_perfil)}" alt="${escapeHtml(d.mensajero.username)}" loading="lazy" class="h-full w-full object-cover">` : escapeHtml((d.mensajero.nombre_completo || d.mensajero.username || 'M').charAt(0).toUpperCase())}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Mensajero Asignado</p>
+                  <h4 class="mt-1 truncate text-sm font-bold text-gray-900">${escapeHtml(d.mensajero.nombre_completo || d.mensajero.username || 'Mensajero')}</h4>
+                </div>
+                <span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-600">Ver</span>
+              </div>
+              <p class="mt-2 text-xs text-gray-500">Haz clic para abrir la ficha compacta con nombre, placa e información de contacto.</p>
+            </div>
+          </div>
+        </button>`
+      : `
+        <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
+          <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Mensajero Asignado</p>
+          <p class="mt-2">Sin mensajero asignado.</p>
+        </div>`;
+
+    body.innerHTML = `
+      <div class="grid grid-cols-1 gap-4">
+        <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Mensajero Asignado</p>
+          <div class="mt-3">${mensajeroHTML}</div>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Información del servicio</p>
+              <h3 class="mt-1 text-lg font-bold text-gray-900">Orden #${escapeHtml(d.orden)}</h3>
+              <p class="text-sm text-gray-500">${escapeHtml(d.estado_display || d.estado || '')}</p>
+            </div>
+            ${badgeMap[d.estado] || ''}
+          </div>
+          <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            ${serviceGridItem('Solicitante', d.nombre_solicitante)}
+            ${serviceGridItem('Teléfono', d.telefono_solicitante, true)}
+            ${serviceGridItem('Vehículo', d.tipo_vehiculo)}
+            ${serviceGridItem('Fecha deseada', d.fecha_entrega_deseada || 'No definida')}
+            <div class="sm:col-span-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3">
+              <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Origen</p>
+              <p class="mt-1 text-sm font-semibold text-gray-900">${escapeHtml(d.origen || '-')}</p>
+            </div>
+            <div class="sm:col-span-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3">
+              <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Destino</p>
+              <p class="mt-1 text-sm font-semibold text-gray-900">${escapeHtml(d.destino || '-')}</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Seguimiento del servicio</p>
+          <div class="mt-4 space-y-2">
+            ${d.mensajero ? `
+              <div class="flex items-start gap-3 p-3 border border-gray-200 rounded-xl bg-gray-50">
+                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold">1</div>
+                <div class="flex-1">
+                  <p class="text-xs font-bold text-gray-900">Mensajero asignado</p>
+                  <p class="text-sm text-gray-600">${escapeHtml(d.mensajero.nombre_completo || d.mensajero.username || 'Mensajero')}</p>
+                </div>
+              </div>` : ''}
+            ${historialHitos.length ? historialHitos.map((hito, index) => {
+              const pasoNum = index + (d.mensajero ? 2 : 1);
+              const descripcion = hito.descripcion || 'Sin descripción';
+              const fotoHTML = hito.foto ? `
+                <button type="button" class="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md evidence-thumb" data-evidence-src="${escapeHtml(hito.foto)}" data-evidence-alt="Hito ${pasoNum}">
+                  <img src="${escapeHtml(hito.foto)}" alt="Hito ${pasoNum}" loading="lazy" class="h-24 w-full object-cover" />
+                </button>` : '';
+
+              const isLastHito = index === historialHitos.length - 1;
+              const deleteButton = (isLastHito && IS_COORDINADOR) ? `
+                <button type="button" onclick="confirmarYRevertirHito()" class="hito-delete" title="Eliminar último hito">
+                  <i class="fas fa-trash"></i>
+                </button>` : '';
+
+              return `
+                <div class="hito-item${isLastHito ? ' last-child' : ''}">
+                  <div class="hito-main">
+                    <div class="hito-head">
+                      <span class="hito-pill">Paso ${pasoNum}</span>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-900">${escapeHtml(descripcion)}</p>
+                    ${fotoHTML}
+                  </div>
+                  ${deleteButton}
+                </div>`;
+            }).join('') : ''}
+          </div>
+        </section>
+
+        ${novedades.length ? `
+        <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Novedades del servicio</p>
+          <div class="mt-4 space-y-2">
+            ${novedades.sort((a, b) => toTime(a.fecha) - toTime(b.fecha)).map((novedad) => {
+              const fechaTexto = novedad.fecha ? new Date(novedad.fecha).toLocaleString('es-CO', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : '';
+              return `
+                <div class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl bg-gray-50">
+                  <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                    <i class="fas fa-exchange-alt text-xs"></i>
+                  </div>
+                  <div class="flex-1">
+                    <p class="text-xs font-semibold text-gray-900">${escapeHtml(fechaTexto)} - ${escapeHtml(novedad.descripcion || '')}</p>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </section>` : ''}
+
+        <section>
+          ${mapaHTML}
+        </section>
+      </div>
+    `;
+
+    const messengerTrigger = document.querySelector('[data-mensajero-open]');
+    if (messengerTrigger) {
+      messengerTrigger.addEventListener('click', () => openMessengerModal(d.mensajero));
+    }
+
+    // Inicializar mapa de forma perezosa sólo si hay coordenadas del mensajero
+    (function initLazyMap() {
+      const container = document.getElementById('map-container');
+      if (!container) return;
+      const lat = d.mensajero_lat;
+      const lng = d.mensajero_lng;
+      if (!lat || !lng) {
+        container.innerHTML = `
+          <div class="mapa-placeholder">
+            <i class="fas fa-map-marked-alt"></i>
+            <strong>Ubicación no disponible</strong>
+            <span>El mensajero aún no ha compartido su ubicación.</span>
+          </div>`;
+        return;
+      }
+
+      // Cargar Leaflet CSS/JS si no están presentes
+      const loadLeaflet = () => new Promise((resolve, reject) => {
+        if (window.L) return resolve(window.L);
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = () => resolve(window.L);
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+
+      loadLeaflet().then((L) => {
+        container.innerHTML = '';
+        const map = L.map(container).setView([lat, lng], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        L.marker([lat, lng]).addTo(map).bindPopup(d.mensajero ? d.mensajero.username : 'Mensajero');
+      }).catch(() => {
+        container.innerHTML = `<div class="mapa-placeholder"><i class="fas fa-map-marked-alt"></i><strong>Error cargando el mapa</strong></div>`;
+      });
+    })();
+
+    const lightbox = document.getElementById('evidence-lightbox');
+    const lightboxImage = document.getElementById('evidence-lightbox-image');
+    const lightboxClose = document.getElementById('evidence-lightbox-close');
+
+    const closeEvidenceLightbox = () => {
+      if (!lightbox || !lightboxImage) return;
+      lightbox.classList.add('hidden');
+      lightbox.classList.remove('flex');
+      lightboxImage.src = '';
+      document.body.style.overflow = '';
+    };
+
+    const openEvidenceLightbox = (src, alt) => {
+      if (!lightbox || !lightboxImage) return;
+      lightboxImage.src = src;
+      lightboxImage.alt = alt || 'Evidencia';
+      lightbox.classList.remove('hidden');
+      lightbox.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+    };
+
+    document.querySelectorAll('.evidence-thumb').forEach((button) => {
+      button.addEventListener('click', () => {
+        openEvidenceLightbox(button.dataset.evidenceSrc, button.dataset.evidenceAlt);
+      });
+    });
+
+    if (lightboxClose) {
+      lightboxClose.addEventListener('click', closeEvidenceLightbox);
+    }
+
+    if (lightbox) {
+      lightbox.addEventListener('click', (event) => {
+        if (event.target === lightbox) {
+          closeEvidenceLightbox();
+        }
+      });
+    }
+
+    const messengerModal = document.getElementById('mensajero-modal');
+    const messengerClose = messengerModal?.querySelector('[data-mensajero-close]');
+    if (messengerClose) {
+      messengerClose.addEventListener('click', closeMessengerModal);
+    }
+    if (messengerModal) {
+      messengerModal.addEventListener('click', (event) => {
+        if (event.target === messengerModal) {
+          closeMessengerModal();
+        }
+      });
+    }
+
+  } catch(e) {
+    body.innerHTML = `<div class="loading" style="flex-direction:column;gap:10px;color:var(--muted);">
+      <i class="fas fa-exclamation-triangle" style="font-size:28px;color:var(--rojo);"></i>
+      No se pudo cargar el servicio.
+    </div>`;
+  }
+}
+
+function cerrarModal() {
+  document.getElementById('overlay').classList.remove('on');
+  closeMessengerModal();
+  const lightbox = document.getElementById('evidence-lightbox');
+  const lightboxImage = document.getElementById('evidence-lightbox-image');
+  if (lightbox && lightboxImage) {
+    lightbox.classList.add('hidden');
+    lightbox.classList.remove('flex');
+    lightboxImage.src = '';
+  }
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const messengerModal = document.getElementById('mensajero-modal');
+  if (messengerModal && !messengerModal.classList.contains('hidden')) {
+    closeMessengerModal();
+    return;
+  }
+  cerrarModal();
+});
+</script>
+{% endblock %}

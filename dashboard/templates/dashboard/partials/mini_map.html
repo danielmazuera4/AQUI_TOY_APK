@@ -1,0 +1,26 @@
+{% load l10n %}
+
+<div
+    id="{{ map_id }}"
+    class="mini-map"
+    data-service-id="{{ servicio.id }}"
+    data-api-url="/api/servicios/{{ servicio.id }}/"
+    data-origin-lat="{{ servicio.origen_lat|unlocalize|default_if_none:'' }}"
+    data-origin-lng="{{ servicio.origen_lng|unlocalize|default_if_none:'' }}"
+    data-destination-lat="{{ servicio.destino_lat|unlocalize|default_if_none:'' }}"
+    data-destination-lng="{{ servicio.destino_lng|unlocalize|default_if_none:'' }}"
+    data-courier-lat="{{ servicio.mensajero_lat|unlocalize|default_if_none:'' }}"
+    data-courier-lng="{{ servicio.mensajero_lng|unlocalize|default_if_none:'' }}"
+>
+    <div class="mini-map__canvas" aria-label="Mapa en tiempo real del servicio"></div>
+    <iframe
+        class="mini-map__frame"
+        title="Mapa de seguimiento del servicio"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        allowfullscreen
+    ></iframe>
+    <button type="button" class="mini-map__expand-btn" data-mini-map-expand>Ampliar mapa</button>
+    <div class="mini-map__fallback">Todavía no hay coordenadas para mostrar el mapa.</div>
+    <div class="mini-map__legend"></div>
+</div>

@@ -1,0 +1,70 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Iniciar Sesión{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-white px-4 py-8 sm:px-6 lg:px-8">
+    <div class="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-md items-center justify-center">
+        <div class="w-full overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <div class="bg-red-600 px-6 py-8 text-center text-white sm:px-8">
+                <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-red-600 shadow-lg">
+                    <i class="fas fa-motorcycle text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-black tracking-tight sm:text-3xl">Mensajería Integral</h1>
+                <p class="mt-2 text-sm text-red-50">Acceso para coordinadores y mensajeros</p>
+            </div>
+
+            <div class="bg-white px-6 py-8 sm:px-8">
+                {% if error %}
+                <div class="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <i class="fas fa-circle-exclamation"></i> {{ error }}
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{% url 'dashboard:login' %}" class="space-y-5">
+                    {% csrf_token %}
+                    <div>
+                        <label class="mb-2 block font-semibold text-gray-900">Usuario</label>
+                        <input type="text" name="username" placeholder="Tu usuario"
+                            class="w-full rounded-2xl border border-gray-200 px-4 py-3 text-gray-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
+                    </div>
+                    <div>
+                        <label class="mb-2 block font-semibold text-gray-900">Contraseña</label>
+                        <div class="relative">
+                            <input id="login-password" type="password" name="password" placeholder="Tu contraseña"
+                                class="w-full rounded-2xl border border-gray-200 px-4 py-3 pr-12 text-gray-900 outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100">
+                            <button type="button" id="toggle-password"
+                                class="absolute inset-y-0 right-0 flex items-center justify-center px-4 text-gray-500 transition hover:text-red-600"
+                                aria-label="Mostrar u ocultar contraseña">
+                                <i id="toggle-password-icon" class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit"
+                        class="w-full rounded-2xl bg-red-600 py-3 font-bold text-white transition hover:bg-red-700">
+                        Iniciar Sesión
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const passwordInput = document.getElementById('login-password');
+    const toggleButton = document.getElementById('toggle-password');
+    const toggleIcon = document.getElementById('toggle-password-icon');
+
+    if (!passwordInput || !toggleButton || !toggleIcon) {
+        return;
+    }
+
+    toggleButton.addEventListener('click', () => {
+        const isHidden = passwordInput.type === 'password';
+        passwordInput.type = isHidden ? 'text' : 'password';
+        toggleIcon.classList.toggle('fa-eye');
+        toggleIcon.classList.toggle('fa-eye-slash');
+    });
+})();
+</script>
+{% endblock %}

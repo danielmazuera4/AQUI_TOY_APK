@@ -1,0 +1,141 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Nuevo Servicio{% endblock %}
+
+{% block content %}
+{% url 'dashboard:inicio' as home_url %}
+<style>
+  .service-create-shell {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .service-create-shell * {
+    box-sizing: border-box;
+  }
+
+  .service-create-shell input,
+  .service-create-shell textarea,
+  .service-create-shell select {
+    width: 100%;
+    max-width: 100%;
+    font-size: clamp(0.95rem, 2.3vw, 1rem);
+  }
+
+  .service-create-shell label,
+  .service-create-shell p,
+  .service-create-shell button,
+  .service-create-shell a {
+    font-size: clamp(0.95rem, 2.1vw, 1rem);
+  }
+
+  .service-create-title {
+    font-size: clamp(1.6rem, 4.8vw, 2.5rem);
+    line-height: 1.1;
+  }
+
+  .service-create-subtitle {
+    font-size: clamp(0.95rem, 2.8vw, 1.05rem);
+    line-height: 1.6;
+  }
+</style>
+
+<div class="service-create-shell mx-auto w-full max-w-5xl px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+    <div class="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+        <div class="border-b border-gray-200 bg-white px-5 py-5 sm:px-6 md:px-8">
+            <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div class="min-w-0">
+                    <p class="text-xs font-bold uppercase tracking-[0.25em] text-gray-500">Formulario operativo</p>
+                    <h1 class="service-create-title mt-2 font-black tracking-tight text-gray-900">Nuevo Servicio</h1>
+                    <p class="service-create-subtitle mt-2 max-w-2xl text-gray-700">
+                        Completa la información del servicio. Los campos se adaptan al ancho disponible en móvil y tablet.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white px-5 py-6 sm:px-6 md:px-8">
+            {% if error %}
+            <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <i class="fas fa-exclamation-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <form method="POST" class="space-y-5" novalidate>
+                {% csrf_token %}
+
+                <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                    <div>
+                        <label class="mb-2 block font-semibold text-gray-700">Sede</label>
+                        <input type="text" name="sede" placeholder="Ej: Sede Principal" class="rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                    </div>
+                    <div>
+                        <label class="mb-2 block font-semibold text-gray-700">Área</label>
+                        <input type="text" name="area" placeholder="Ej: Back Office" class="rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="mb-2 block font-semibold text-gray-700">Origen</label>
+                    <textarea name="origen" rows="2" placeholder="Dirección de recogida" class="rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"></textarea>
+                </div>
+
+                <div>
+                    <label class="mb-2 block font-semibold text-gray-700">Destino</label>
+                    <textarea name="destino" rows="2" placeholder="Dirección de entrega" class="rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+                    <div>
+                        <label class="mb-2 block font-semibold text-gray-700">Tipo de vehículo</label>
+                        <select name="tipo_vehiculo" class="rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                            <option value="moto">Moto</option>
+                            <option value="camioneta">Camioneta</option>
+                            <option value="bicicleta">Bicicleta</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="mb-2 block font-semibold text-gray-700">Prioridad</label>
+                        <select name="prioridad" class="rounded-2xl border border-gray-300 px-4 py-3 text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                            <option value="normal">Normal</option>
+                            <option value="alta">Alta</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                    <button type="button" onclick="confirmarSalidaServicio()" class="inline-flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-5 py-3 font-semibold text-gray-700 transition hover:bg-gray-50">
+                        <i class="fas fa-xmark"></i> Cancelar
+                    </button>
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-700 px-6 py-3 font-bold text-white transition hover:bg-blue-800">
+                        <i class="fas fa-paper-plane"></i> Crear Servicio
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+  function confirmarSalidaServicio() {
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalConfirmarSalirServicio'));
+        modal.show();
+  }
+</script>
+<div class="modal fade" id="modalConfirmarSalirServicio" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Confirmar salida</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">¿Seguro que desea salir a la ventana principal?</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="window.location.href='{{ volver_url|default:home_url|escapejs }}'">Salir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
