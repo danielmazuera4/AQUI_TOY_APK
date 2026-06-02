@@ -20,6 +20,7 @@ class ServicioResumenSerializer(serializers.ModelSerializer):
     cliente_empresa_nombre = serializers.SerializerMethodField()
     mensajero_username = serializers.SerializerMethodField()
     mensajero_id = serializers.SerializerMethodField()
+    motivo_abandono = serializers.SerializerMethodField()
 
     class Meta:
         model = Servicio
@@ -35,7 +36,7 @@ class ServicioResumenSerializer(serializers.ModelSerializer):
             'mensajero_lat', 'mensajero_lng', 'mensajero_ubicacion_actualizada_en',
             'seguimientos',
             'creado_por_username', 'cliente_username', 'cliente_empresa_nombre',
-            'mensajero_username', 'mensajero_id',
+            'mensajero_username', 'mensajero_id', 'motivo_abandono',
         ]
 
     def get_creado_por_username(self, obj):
@@ -54,6 +55,10 @@ class ServicioResumenSerializer(serializers.ModelSerializer):
 
     def get_mensajero_id(self, obj):
         return obj.mensajero_id
+
+    def get_motivo_abandono(self, obj):
+        novedad_abandono = obj.novedades.filter(descripcion__startswith='Servicio abandonado por').order_by('-fecha').first()
+        return novedad_abandono.descripcion if novedad_abandono else None
 
 class ServicioSerializer(serializers.ModelSerializer):
     seguimientos = SeguimientoSerializer(many=True, read_only=True)

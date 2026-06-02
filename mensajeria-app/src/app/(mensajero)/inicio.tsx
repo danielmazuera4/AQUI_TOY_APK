@@ -1243,14 +1243,24 @@ export default function InicioMensajero() {
           <Pressable style={styles.modalCard} onPress={() => null}>
             <Text style={styles.modalTitle}>Detalle del servicio</Text>
             {(() => {
-              const novedades = servicioEnDetalle?.novedades;
-              if (!Array.isArray(novedades) || novedades.length === 0) return null;
-              const abandonoNovedad = novedades.find((n: any) => n.descripcion?.toLowerCase().includes('abandonado'));
-              if (!abandonoNovedad) return null;
+              const motivoAbandono = servicioEnDetalle?.motivo_abandono;
+              if (!motivoAbandono) return null;
+              const match = motivoAbandono.match(/Servicio abandonado por (.+)\. Motivo: (.+)/);
+              if (!match) return null;
+              const nombre = match[1];
+              const motivo = match[2];
               return (
-                <Text style={styles.abandonoAlertText}>
-                  ⚠️ Este servicio fue abandonado previamente. {abandonoNovedad.descripcion}
-                </Text>
+                <View style={{ backgroundColor: '#FFF0F0', borderLeftWidth: 4, borderLeftColor: '#C8102E', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ color: '#9B1C1C', fontWeight: 'normal', fontSize: 15, marginBottom: 4 }}>
+                     ⚠️ Novedades de abandono
+                  </Text>
+                  <Text style={{ color: '#9B1C1C', fontWeight: 'normal', fontSize: 13 }}>
+                    Abandonado por: {nombre}
+                  </Text>
+                  <Text style={{ color: '#9B1C1C', fontWeight: 'normal', fontSize: 13 }}>
+                    Motivo: {motivo}
+                  </Text>
+                </View>
               );
             })()}
             <ScrollView showsVerticalScrollIndicator={false}>
