@@ -387,6 +387,7 @@ class AbandonarServicioView(APIView):
         if motivo:
             descripcion = f'{descripcion}. Motivo: {motivo}'
 
+        # Save abandonment record in Novedades with messenger name, reason, and timestamp
         Novedad.objects.create(
             servicio=servicio,
             descripcion=descripcion,
@@ -395,6 +396,7 @@ class AbandonarServicioView(APIView):
         servicio.mensajero = None
         servicio.estado = 'sin_asignar'
         servicio.save(update_fields=['mensajero', 'estado'])
+        servicio.refresh_from_db()
 
         return Response(ServicioSerializer(servicio).data, status=status.HTTP_200_OK)
 

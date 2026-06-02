@@ -9,6 +9,7 @@ import {
   Linking,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -30,6 +31,7 @@ const TAB_KEYS = ['progreso', 'disponibles', 'terminados'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 const EVIDENCE_PASOS = [2, 3] as const;
 const NOVEDAD_OPCIONES = ['Trancón / Tráfico', 'Problema mecánico', 'Dirección incorrecta', 'Cliente no contesta', 'Otros...'] as const;
+const ABANDONO_OPCIONES = ['Falla mecánica', 'Problema de tránsito', 'Paquete muy grande', 'Emergencia personal', 'Otro'] as const;
 const PAGE_SIZE = 15;
 const crearProgresoStorageKey = (servicioId: number) => `@servicio_${servicioId}_progreso`;
 
@@ -453,6 +455,9 @@ export default function InicioMensajero() {
   const [novedadSeleccionada, setNovedadSeleccionada] = useState('');
   const [novedadTextoOtros, setNovedadTextoOtros] = useState('');
   const [novedadServicio, setNovedadServicio] = useState<any | null>(null);
+  const [modalAbandonoVisible, setModalAbandonoVisible] = useState(false);
+  const [motivoAbandonoSeleccionado, setMotivoAbandonoSeleccionado] = useState('');
+  const [textoAbandonoOtro, setTextoAbandonoOtro] = useState('');
   const fade = useState(new Animated.Value(1))[0];
   const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorW = useRef(new Animated.Value(0)).current;
@@ -761,16 +766,6 @@ export default function InicioMensajero() {
   }, [tab, usuario, loadedTabs, cargarTab]);
 
   useEffect(() => {
-    if (!usuario || tab !== 'progreso') return;
-
-    const interval = setInterval(() => {
-      void refreshAllTabs();
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [usuario, tab, refreshAllTabs]);
-
-  useEffect(() => {
     Animated.timing(fade, {
       toValue: 1,
       duration: 180,
@@ -816,47 +811,30 @@ export default function InicioMensajero() {
 
   async function abandonarSeleccionados() {
     if (selectedIds.length === 0) return;
+    setModalAbandonoVisible(true);
+  }
 
-    Alert.alert('Confirmar', `¿Abandonar ${selectedIds.length} servicio(s)?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Abandonar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            for (const id of selectedIds) {
-              const servicioObj =
-                serviciosProgreso.find((s) => s.id === id) ||
-                serviciosDisponibles.find((s) => s.id === id) ||
-                serviciosTerminados.find((s) => s.id === id) ||
-                null;
+  async function confirmarAbandono() {
+    try {
+      for (const id of selectedIds) {
+        const motivoFinal = motivoAbandonoSeleccionado === 'Otro' ? textoAbandonoOtro.trim() : motivoAbandonoSeleccionado;
+        if (!motivoFinal) {
+          Alert.alert('Error', 'Debe seleccionar o escribir un motivo de abandono.');
+          return;
+        }
 
-              const solicitante =
-                servicioObj?.nombre_solicitante || servicioObj?.cliente?.username || servicioObj?.creado_por?.username || '-';
-              const timestamp = new Date().toLocaleString();
-              const motivo = `Reasignado por ${usuario?.username || 'mensajero'} — solicitante: ${solicitante} — ${timestamp}`;
+        await abandonarServicioApi(id, motivoFinal);
+      }
 
-              await abandonarServicioApi(id, motivo);
-              // PROHIBIDO: Se elimina la limpieza automática de AsyncStorage y estados locales al abandonar.
-              // El estado real del servicio solo debe ser alterado por la respuesta oficial de la API de Django.
-
-              try {
-                await reportarNovedadApi(id, `Servicio reasignado por ${usuario?.username || 'mensajero'} el ${timestamp}`);
-              } catch {
-                // La novedad no bloquea el flujo principal.
-              }
-            }
-
-            setSelectedIds([]);
-            await cargarTab('progreso');
-            await cargarTab('disponibles');
-            Alert.alert('Listo', 'Servicios abandonados y enviados a Disponibles.');
-          } catch (err: any) {
-            Alert.alert('Error', err?.message || 'No se pudieron abandonar los servicios seleccionados.');
-          }
-        },
-      },
-    ]);
+      setSelectedIds([]);
+      setModalAbandonoVisible(false);
+      setMotivoAbandonoSeleccionado('');
+      setTextoAbandonoOtro('');
+      await refreshAllTabs();
+      Alert.alert('Listo', 'Servicios abandonados y enviados a Disponibles.');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'No se pudieron abandonar los servicios seleccionados.');
+    }
   }
 
   // --- Evidence helpers ---
@@ -1176,10 +1154,14 @@ export default function InicioMensajero() {
                   maxToRenderPerBatch={PAGE_SIZE}
                   windowSize={5}
                   removeClippedSubviews
-                  refreshing={refreshing && tab === key}
-                  onRefresh={() => {
-                    void refreshAllTabs();
-                  }}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing && tab === key}
+                      onRefresh={async () => {
+                        await refreshAllTabs();
+                      }}
+                    />
+                  }
                   onEndReached={() => {
                     void cargarMasServicios(key);
                   }}
@@ -1260,6 +1242,17 @@ export default function InicioMensajero() {
         <Pressable style={styles.modalOverlay} onPress={() => setDetalleVisible(false)}>
           <Pressable style={styles.modalCard} onPress={() => null}>
             <Text style={styles.modalTitle}>Detalle del servicio</Text>
+            {(() => {
+              const novedades = servicioEnDetalle?.novedades;
+              if (!Array.isArray(novedades) || novedades.length === 0) return null;
+              const abandonoNovedad = novedades.find((n: any) => n.descripcion?.toLowerCase().includes('abandonado'));
+              if (!abandonoNovedad) return null;
+              return (
+                <Text style={styles.abandonoAlertText}>
+                  ⚠️ Este servicio fue abandonado previamente. {abandonoNovedad.descripcion}
+                </Text>
+              );
+            })()}
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalLine}><Text style={styles.modalLabel}>Orden: </Text>{texto(servicioEnDetalle?.orden)}</Text>
               <Text style={styles.modalLine}><Text style={styles.modalLabel}>Empresa: </Text>{empresa(servicioEnDetalle)}</Text>
@@ -1387,6 +1380,60 @@ export default function InicioMensajero() {
             <View style={styles.modalActionsRow}>
               <TouchableOpacity onPress={submitNovedad} style={styles.modalPrimaryButton} activeOpacity={0.86}>
                 <Text style={styles.modalPrimaryButtonText}>Reportar novedad</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={modalAbandonoVisible} transparent={true} animationType="fade" onRequestClose={() => setModalAbandonoVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setModalAbandonoVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation()}>
+            <Text style={[styles.modalTitle, { textAlign: 'center', width: '100%' }]}>Motivo de Abandono</Text>
+
+            <View style={{ marginTop: 8, gap: 8 }}>
+              {ABANDONO_OPCIONES.map((opcion) => {
+                const active = motivoAbandonoSeleccionado === opcion;
+                return (
+                  <TouchableOpacity
+                    key={`abandono-${opcion}`}
+                    onPress={() => {
+                      setMotivoAbandonoSeleccionado(opcion);
+                      if (opcion !== 'Otro') setTextoAbandonoOtro('');
+                    }}
+                    activeOpacity={0.86}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: active ? '#111111' : '#E5E7EB',
+                      backgroundColor: active ? '#111111' : '#F9FAFB',
+                    }}
+                  >
+                    <Text style={[styles.modalOptionText, typography.label, active && styles.modalOptionTextActive]}>{opcion}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {motivoAbandonoSeleccionado === 'Otro' ? (
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Escribe el motivo detallado..."
+                multiline={true}
+                value={textoAbandonoOtro}
+                onChangeText={setTextoAbandonoOtro}
+                textAlignVertical="top"
+              />
+            ) : null}
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity onPress={() => setModalAbandonoVisible(false)} style={[styles.modalSecondaryButton, { marginRight: 8 }]} activeOpacity={0.86}>
+                <Text style={styles.modalSecondaryButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={confirmarAbandono} style={styles.modalPrimaryButton} activeOpacity={0.86}>
+                <Text style={styles.modalPrimaryButtonText}>Confirmar Abandono</Text>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -1591,4 +1638,5 @@ cardFooter: {
   modalActionText: { color: '#111827', fontSize: 13 },
   modalOptionText: { color: '#111827', fontSize: 13 },
   modalOptionTextActive: { color: '#FFFFFF' },
+  abandonoAlertText: { color: '#DC2626', fontSize: 13, fontWeight: '600', marginBottom: 12, padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8 },
 });
