@@ -164,18 +164,25 @@ const ServiceCard = memo(function ServiceCard({
   isCardBusy?: boolean;
 }) {
   const seguimiento1 = obtenerSeguimiento(servicio, 1);
-  const seguimiento2 = obtenerSeguimiento(servicio, 2);
-  const seguimiento3 = obtenerSeguimiento(servicio, 3);
   const esSoloLectura = tab === 'terminados';
   const puedeExpandirTimeline = tab !== 'disponibles';
-  const fotoPaso2 = estadoPaso2.fotoSubida || Boolean(seguimiento2?.foto);
-  const fotoPaso3 = estadoPaso3.fotoSubida || Boolean(seguimiento3?.foto);
-  const descripcionPaso2 = estadoPaso2.descripcionEscrita || Boolean(seguimiento2?.descripcion);
-  const descripcionPaso3 = estadoPaso3.descripcionEscrita || Boolean(seguimiento3?.descripcion);
-  const paso2Completo = fotoPaso2 && descripcionPaso2;
-  const paso3Completo = fotoPaso3 && descripcionPaso3;
+
+  // REGLA 1: LA BASE DE DATOS MANDA (ESPEJO PASIVO)
+  const hito2ExisteEnBackend = Boolean(servicio.seguimientos?.find((s: any) => Number(s.paso) === 2));
+  const hito3ExisteEnBackend = Boolean(servicio.seguimientos?.find((s: any) => Number(s.paso) === 3));
+
+  // REGLA 2: FORZAR ESTADO GRIS Y LIBRE SI NO EXISTE EN BACKEND
+  const fotoPaso2 = hito2ExisteEnBackend;
+  const descripcionPaso2 = hito2ExisteEnBackend;
+  const fotoPaso3 = hito3ExisteEnBackend;
+  const descripcionPaso3 = hito3ExisteEnBackend;
+
+  const paso2Completo = hito2ExisteEnBackend;
+  const paso3Completo = hito3ExisteEnBackend;
+
   const paso2Activo = !paso2Completo;
   const paso3Activo = paso2Completo && !paso3Completo;
+
   const railProgressLevel = paso3Completo ? 3 : paso2Completo ? 2 : 1;
 
   const renderActionButton = (
@@ -360,7 +367,9 @@ const ServiceCard = memo(function ServiceCard({
                       )}
                     </View>
                   </View>
-                  <Text style={styles.timelineMeta}>{seguimiento2 ? formatearFechaHora(seguimiento2.fecha) : '-'}</Text>
+                  <Text style={styles.timelineMeta}>
+                    {obtenerSeguimiento(servicio, 2) ? formatearFechaHora(obtenerSeguimiento(servicio, 2).fecha) : '-'}
+                  </Text>
                 </View>
               </View>
 
@@ -388,7 +397,9 @@ const ServiceCard = memo(function ServiceCard({
                       )}
                     </View>
                   </View>
-                  <Text style={styles.timelineMeta}>{seguimiento3 ? formatearFechaHora(seguimiento3.fecha) : '-'}</Text>
+                  <Text style={styles.timelineMeta}>
+                    {obtenerSeguimiento(servicio, 3) ? formatearFechaHora(obtenerSeguimiento(servicio, 3).fecha) : '-'}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -502,28 +513,11 @@ export default function InicioMensajero() {
           const apiTieneHito = apiState.fotoSubida || apiState.descripcionEscrita;
 
           if (apiTieneHito) {
-            // ESPEJO ESTRICTO: Si Django confirma el hito, mandamos los datos del servidor.
             nextStates[key] = apiState;
           } else {
-            // Si Django no tiene hito, verificamos si hay trabajo local sin subir (unsynced).
-            const snap = storageSnapshots[servicio.id];
-            const snapUri = paso === 2 ? snap?.fotoUriPaso2 : snap?.fotoUriPaso3;
-            const snapDesc = paso === 2 ? snap?.descripcionTextoPaso2 : snap?.descripcionTextoPaso3;
-            const snapEsLocal = Boolean(snapUri && (snapUri.startsWith('file') || snapUri.startsWith('content')));
-
-            if (snapEsLocal) {
-              nextStates[key] = {
-                fotoSubida: Boolean(snapUri),
-                descripcionEscrita: Boolean(snapDesc),
-                fotoUri: snapUri || null,
-                descripcion: snapDesc || null,
-              };
-            }
-            else {
-              // Django no lo tiene y no hay captura local pendiente -> LIMPIAR.
-              // Esto elimina los "datos fantasmas" de la APK.
-              delete nextStates[key];
-            }
+            // REGLA 3: LIMPIEZA INMEDIATA EN EL SET_ESTADO (ESPEJO ESTRICTO)
+            // Si el backend no tiene el hito, eliminamos cualquier registro local para forzar el estado "libre/gris".
+            delete nextStates[key];
           }
         }
       }
@@ -765,6 +759,16 @@ export default function InicioMensajero() {
       isMountedRef.current = false;
     };
   }, [tab, usuario, loadedTabs, cargarTab]);
+
+  useEffect(() => {
+    if (!usuario || tab !== 'progreso') return;
+
+    const interval = setInterval(() => {
+      void refreshAllTabs();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [usuario, tab, refreshAllTabs]);
 
   useEffect(() => {
     Animated.timing(fade, {

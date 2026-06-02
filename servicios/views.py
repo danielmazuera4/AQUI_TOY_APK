@@ -503,16 +503,16 @@ class EliminarUltimoHitoView(APIView):
                         ultimo_hito.foto.storage.delete(foto_name)
                 ultimo_hito.delete()
 
-                servicio.estado = 'sin_asignar'
-                servicio.mensajero = None
-                servicio.mensajero_lat = None
-                servicio.mensajero_lng = None
-                servicio.mensajero_ubicacion_actualizada_en = None
-                servicio.save(update_fields=['estado', 'mensajero', 'mensajero_lat', 'mensajero_lng', 'mensajero_ubicacion_actualizada_en'])
+                if servicio.mensajero:
+                    servicio.estado = 'en_progreso'
+                else:
+                    servicio.estado = 'sin_asignar'
+                servicio.save(update_fields=['estado'])
 
         except Servicio.DoesNotExist:
             return Response({'error': 'Servicio no encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
+        servicio.refresh_from_db()
         return Response(
             {
                 'message': 'Hito eliminado correctamente',
