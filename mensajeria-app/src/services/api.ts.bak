@@ -1,0 +1,48 @@
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.248.167.251:8000/api';
+
+const api = axios.create({
+  baseURL: BASE_URL,
+  timeout: 10000,
+});
+
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Auth
+export const loginApi = (username: string, password: string) =>
+  api.post('/usuarios/login/', { username, password });
+
+// Servicios
+export const getServiciosApi = (estado?: string) =>
+  api.get('/servicios/', { params: { estado } });
+
+export const getServicioDetalleApi = (id: number) =>
+  api.get(`/servicios/${id}/`);
+
+export const actualizarUbicacionApi = (id: number, latitud: number, longitud: number) =>
+  api.post(`/servicios/${id}/ubicacion/`, { latitud, longitud });
+
+export const aceptarServicioApi = (id: number) =>
+  api.post(`/servicios/${id}/aceptar/`);
+
+export const completarPasoApi = (id: number, paso: number, data: FormData) =>
+  api.patch(`/servicios/${id}/paso/${paso}/`, data, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+
+export const reportarNovedadApi = (id: number, descripcion: string) =>
+  api.post(`/servicios/${id}/novedad/`, { descripcion });
+
+export const abandonarServicioApi = (id: number, motivo: string) =>
+  api.post(`/servicios/${id}/abandonar/`, { motivo });
+
+export default api;

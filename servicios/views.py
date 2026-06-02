@@ -503,13 +503,6 @@ class EliminarUltimoHitoView(APIView):
                         ultimo_hito.foto.storage.delete(foto_name)
                 ultimo_hito.delete()
 
-                # Reordenar los hitos restantes para que sean consecutivos empezando desde 1
-                seguimientos_restantes = list(servicio.seguimientos.all().order_by('paso'))
-                for index, seguimiento in enumerate(seguimientos_restantes, start=1):
-                    if seguimiento.paso != index:
-                        seguimiento.paso = index
-                        seguimiento.save(update_fields=['paso'])
-
                 servicio.estado = 'sin_asignar'
                 servicio.mensajero = None
                 servicio.mensajero_lat = None

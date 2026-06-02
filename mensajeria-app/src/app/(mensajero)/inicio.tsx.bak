@@ -1,0 +1,341 @@
+import { useEffect, useRef, useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  ActivityIndicator,
+  Alert,
+  Animated,
+  FlatList,
+  Linking,
+  Modal,
+  PanResponder,
+  ScrollView,
+  RefreshControl,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '../../context/AuthContext';
+import { getServiciosApi, aceptarServicioApi, completarPasoApi, reportarNovedadApi, abandonarServicioApi } from '../../services/api';
+import { buildRouteUrl } from '../../utils/maps';
+import { startBackgroundTracking } from '../../services/background-location';
+import { MiniMap } from '../../components/mini-map';
+
+export default function InicioMensajero() {
+  const { usuario, logout } = useAuth();
+  const insets = useSafeAreaInsets();
+  const tabsOrden = ['progreso', 'sin_asignar', 'terminados'] as const;
+  const [serviciosProgreso, setServiciosProgreso] = useState<any[]>([]);
+  const [serviciosSinAsignar, setServiciosSinAsignar] = useState<any[]>([]);
+  const [serviciosTerminados, setServiciosTerminados] = useState<any[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [tab, setTab] = useState<'progreso' | 'sin_asignar' | 'terminados'>('progreso');
+  const [servicioExpandido, setServicioExpandido] = useState<number | null>(null);
+  const [servicioDetalles, setServicioDetalles] = useState<any | null>(null);
+  const [descripcionPaso, setDescripcionPaso] = useState<{ servicioId: number | null; paso: number | null; texto: string }>(
+    {
+      servicioId: null,
+      paso: null,
+      texto: '',
+    }
+  );
+  const [descripcionModal, setDescripcionModal] = useState<{ servicioId: number | null; paso: number | null; texto: string }>(
+    {
+      servicioId: null,
+      paso: null,
+      texto: '',
+    }
+  );
+  const [novedadAbierta, setNovedadAbierta] = useState<number | null>(null);
+  const [tabsWidth, setTabsWidth] = useState(0);
+  const [transicionDireccion, setTransicionDireccion] = useState<1 | -1>(1);
+  const transitionAnim = useRef(new Animated.Value(1)).current;
+  const indicatorAnim = useRef(new Animated.Value(0)).current;
+  const panX = useRef(new Animated.Value(0)).current;
+  const bottomBarHeight = 88; // altura reservada para barras fijas (px)
+  const listPaddingBottom = Math.round(bottomBarHeight + insets.bottom + 16);
+
+  const tabIndex = tabsOrden.indexOf(tab);
+  const indicadorAncho = tabsWidth > 0 ? tabsWidth / 3 : 0;
+  const indicadorFactor = 0.6; // ancho relativo del indicador dentro de la pestaña
+  const indicadorWidth = indicadorAncho * indicadorFactor;
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [acceptingSelected, setAcceptingSelected] = useState(false);
+  const [abandonarModalVisible, setAbandonarModalVisible] = useState(false);
+  const [abandonarServicioId, setAbandonarServicioId] = useState<number | null>(null);
+  const [abandonarMotivo, setAbandonarMotivo] = useState<string>('');
+  const [abandonarEsOtro, setAbandonarEsOtro] = useState(false);
+  const motivos = [
+    'Imposibilidad de entrega',
+    'Problema con el paquete',
+    'Emergencia personal',
+    'Otro',
+  ];
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return [...prev, id];
+    });
+  };
+
+  const handleAceptarSelected = async () => {
+    if (selectedIds.length === 0) return;
+    setAcceptingSelected(true);
+    const successes: number[] = [];
+    const failures: number[] = [];
+    for (const id of selectedIds) {
+      try {
+        await aceptarServicioApi(id);
+        void startBackgroundTracking(id);
+        successes.push(id);
+      } catch {
+        failures.push(id);
+      }
+    }
+    setAcceptingSelected(false);
+    setSelectedIds([]);
+    await cargarServicios();
+    Alert.alert('Resultado', `Aceptados: ${successes.length}${failures.length ? `, fallidos: ${failures.length}` : ''}`);
+  };
+  const indicadorOffset = indicadorAncho > 0 ? (indicadorAncho - indicadorWidth) / 2 : 0;
+
+  const cambiarTabPorDeslizamiento = (direccion: 'izquierda' | 'derecha') => {
+    const indiceActual = tabsOrden.indexOf(tab);
+    const siguienteIndice = direccion === 'izquierda' ? indiceActual + 1 : indiceActual - 1;
+
+    if (siguienteIndice >= 0 && siguienteIndice < tabsOrden.length) {
+      setTransicionDireccion(direccion === 'izquierda' ? 1 : -1);
+      setTab(tabsOrden[siguienteIndice]);
+    }
+  };
+
+  const cambiarTabConAnimacion = (siguienteTab: typeof tab, direccion: 1 | -1) => {
+    if (siguienteTab === tab) return;
+    setTransicionDireccion(direccion);
+    setTab(siguienteTab);
+  };
+
+  const panResponder = PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gestureState) => {
+      const esHorizontal = Math.abs(gestureState.dx) > 10;
+      const dominaHorizontal = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      return esHorizontal && dominaHorizontal;
+    },
+    onPanResponderGrant: () => {
+      panX.setValue(0);
+    },
+    onPanResponderMove: (_, gestureState) => {
+      // update panX for visual follow, clamp a bit
+      panX.setValue(gestureState.dx);
+      // update indicator to follow finger: fractional index
+      if (indicadorAncho > 0) {
+        const frac = -gestureState.dx / indicadorAncho;
+        indicatorAnim.setValue(tabIndex + frac);
+      }
+    },
+    onPanResponderRelease: (_, gestureState) => {
+      const dx = gestureState.dx;
+      // decide tab change threshold
+      if (dx < -50) {
+        cambiarTabPorDeslizamiento('izquierda');
+      } else if (dx > 50) {
+        cambiarTabPorDeslizamiento('derecha');
+      }
+
+      // animate panX back to 0
+      Animated.spring(panX, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 6 }).start();
+
+      // snap indicator to nearest tab index
+      Animated.spring(indicatorAnim, { toValue: tabsOrden.indexOf(tab), useNativeDriver: true, speed: 20, bounciness: 8 }).start();
+    },
+  });
+
+  useEffect(() => {
+    transitionAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(transitionAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.spring(indicatorAnim, {
+        toValue: tabIndex >= 0 ? tabIndex : 0,
+        useNativeDriver: true,
+        speed: 18,
+        bounciness: 10,
+      }),
+    ]).start();
+  }, [indicatorAnim, tabIndex, transitionAnim]);
+
+  useEffect(() => {
+    cargarServicios();
+  }, []);
+  
+  // Carga de servicios desde backend y filtrado por mensajero
+  const cargarServicios = async () => {
+    setCargando(true);
+    try {
+      const [progresoRes, sinAsignarRes, terminadosRes] = await Promise.all([
+        getServiciosApi('en_progreso'),
+        getServiciosApi('sin_asignar'),
+        getServiciosApi('terminado'),
+      ]);
+
+      const progreso = progresoRes?.data || [];
+      const sinAsignar = sinAsignarRes?.data || [];
+      const terminados = terminadosRes?.data || [];
+
+      // Filtrar por mensajero cuando exista
+      setServiciosProgreso(progreso.filter((s: any) => s.mensajero?.id === usuario?.id));
+      setServiciosSinAsignar(sinAsignar);
+      setServiciosTerminados(terminados.filter((s: any) => s.mensajero?.id === usuario?.id));
+    } catch (err: any) {
+      console.error('Error cargarServicios', err?.response || err?.message || err);
+      Alert.alert('Error', 'No se pudieron cargar los servicios. Revisa la conexión o el backend.');
+    } finally {
+      setCargando(false);
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.headerTitle}>Hola, {usuario?.username || 'Mensajero'}</Text>
+          <Text style={styles.headerSubtitle}>{usuario?.empresa?.nombre || ''}</Text>
+        </View>
+        <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+          <Text style={styles.logoutText}>Salir</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={{ padding: 12 }}>
+        <TouchableOpacity onPress={() => { setRefreshing(true); cargarServicios(); }} style={{ backgroundColor: '#1d4ed8', padding: 10, borderRadius: 8 }}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Actualizar servicios</Text>
+        </TouchableOpacity>
+      </View>
+
+      {cargando ? (
+        <ActivityIndicator size="large" color="#1d4ed8" style={{ marginTop: 24 }} />
+      ) : (
+        <View style={{ flex: 1, paddingHorizontal: 12 }}>
+          <Text style={{ fontWeight: '800', marginBottom: 8 }}>En progreso ({serviciosProgreso.length})</Text>
+          <FlatList
+            data={serviciosProgreso}
+            keyExtractor={(item: any) => String(item.id)}
+            renderItem={({ item }: any) => (
+              <View style={{ padding: 12, backgroundColor: '#fff', borderRadius: 10, marginBottom: 8 }}>
+                <Text style={{ fontWeight: '800' }}>{item.orden ? `Orden #${item.orden}` : `ID ${item.id}`}</Text>
+                <Text>{item.cliente?.empresa?.nombre || item.cliente?.username || item.creado_por?.username || '-'}</Text>
+                <Text style={{ color: '#6b7280' }}>{item.origen} → {item.destino}</Text>
+              </View>
+            )}
+            ListEmptyComponent={<Text style={{ color: '#6b7280', marginTop: 16 }}>No hay servicios en progreso.</Text>}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#f4f5f7' },
+  header: { backgroundColor: '#f4f5f7', paddingHorizontal: 18, paddingTop: 52, paddingBottom: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { color: '#111827', fontSize: 18, fontWeight: '800' },
+  headerSubtitle: { color: '#6b7280', fontSize: 13 },
+  logoutButton: { backgroundColor: '#ef4444', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  logoutText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  tabs: { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e5e7eb' },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', zIndex: 1 },
+  tabIndicator: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#dbeafe' },
+  tabText: { fontSize: 11, color: '#6b7280', textAlign: 'center' },
+  tabTextActive: { color: '#1d4ed8', fontWeight: 'bold' },
+  listWrapper: { flex: 1 },
+  cardSelected: { borderWidth: 2, borderColor: '#60a5fa', backgroundColor: '#f0f9ff' },
+  smallDetailButton: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e6eefc', marginRight: 8 },
+  smallDetailButtonText: { color: '#2563eb', fontWeight: '800', fontSize: 12 },
+  acceptSelectedBar: { position: 'absolute', left: 12, right: 12, bottom: 12, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ffffff', borderRadius: 14, elevation: 6, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  acceptSelectedText: { color: '#374151', fontWeight: '700' },
+  acceptSelectedButton: { backgroundColor: '#10b981', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  acceptSelectedButtonText: { color: '#fff', fontWeight: '900' },
+
+  motivoItem: { paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#eef2ff' },
+  motivoText: { color: '#374151' },
+  motivoTextSelected: { color: '#1d4ed8', fontWeight: '800' },
+  abandonSelectedBar: { position: 'absolute', left: 12, right: 12, bottom: 12, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ffffff', borderRadius: 14, elevation: 6, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  abandonSelectedButton: { backgroundColor: '#ef4444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  abandonSelectedButtonText: { color: '#fff', fontWeight: '900' },
+  cardSelectedProgreso: { borderWidth: 2, borderColor: '#ef4444', backgroundColor: '#fff5f5' },
+  cardSelectedAvailable: { borderWidth: 2, borderColor: '#10b981', backgroundColor: '#ecfdf5' },
+
+  cardLarge: { backgroundColor: '#fff', borderRadius: 24, padding: 18, marginBottom: 14, elevation: 3, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+  companyLarge: { fontSize: 22, fontWeight: '900', color: '#111827', marginBottom: 6, letterSpacing: -0.3 },
+  largeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8 },
+  orderLarge: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  priorityLarge: { color: '#ef4444', fontSize: 11, fontWeight: '800', borderWidth: 1, borderColor: '#ef4444', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  largeBody: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
+  largeColumn: { flex: 1 },
+  largeDivider: { width: 1, backgroundColor: '#d1d5db' },
+  metaLabel: { fontSize: 11, fontWeight: '800', color: '#6b7280', textTransform: 'uppercase', marginTop: 6 },
+  metaValue: { fontSize: 13, color: '#374151', marginBottom: 2, fontWeight: '600' },
+  mapWrap: { marginTop: 14, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: '#e5e7eb' },
+  photoFlowCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  flowStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  flowBadge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  flowBadgeAssigned: { backgroundColor: '#6fbf5d' },
+  flowBadgePickup: { backgroundColor: '#222831' },
+  flowBadgeDelivery: { backgroundColor: '#222831' },
+  flowBadgeText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  flowContent: { flex: 1 },
+  flowTitle: { fontSize: 13, fontWeight: '900', color: '#111827', marginBottom: 4 },
+  flowBody: { fontSize: 12, color: '#4b5563', lineHeight: 16, fontWeight: '600' },
+  flowStatus: { fontSize: 11, color: '#0f766e', fontWeight: '800', marginTop: 4 },
+  flowSeparator: { height: 16, borderLeftWidth: 1, borderLeftColor: '#cbd5e1', marginLeft: 15.5, marginTop: 4, marginBottom: 4 },
+  flowButtonsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
+  flowButtonPrimary: { borderWidth: 1, borderColor: '#60a5fa', backgroundColor: '#eff6ff', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  flowButtonPrimaryText: { color: '#1d4ed8', fontSize: 12, fontWeight: '800' },
+  flowButtonSecondary: { borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  flowButtonSecondaryText: { color: '#475569', fontSize: 12, fontWeight: '700' },
+  reportLink: { marginTop: 14, alignSelf: 'center' },
+  reportLinkText: { color: '#2563eb', fontSize: 12, fontWeight: '800', textDecorationLine: 'underline' },
+  descriptionEditor: { marginTop: 10, backgroundColor: '#f8fafc', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#dbeafe' },
+  descriptionInput: { minHeight: 88, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#fff', color: '#111827', fontSize: 13 },
+  descriptionButtonsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  descriptionSaveButton: { flex: 1, backgroundColor: '#1d4ed8', borderRadius: 12, paddingVertical: 10, alignItems: 'center' },
+  descriptionSaveText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  descriptionCancelButton: { borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#fff', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, alignItems: 'center' },
+  descriptionCancelText: { color: '#334155', fontWeight: '800', fontSize: 12 },
+  novedadesPanel: { marginTop: 12, backgroundColor: '#fff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e2e8f0' },
+  novedadesTitulo: { fontSize: 13, fontWeight: '900', color: '#334155', marginBottom: 10 },
+  novedadItem: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbeafe', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 8 },
+  novedadItemText: { color: '#1d4ed8', fontWeight: '700', fontSize: 12 },
+  novedadCerrar: { alignSelf: 'center', marginTop: 4 },
+  novedadCerrarText: { color: '#64748b', fontWeight: '800', fontSize: 12 },
+  largeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 14 },
+  detailsButton: { backgroundColor: '#fff', borderRadius: 999, paddingVertical: 10, paddingHorizontal: 14, alignItems: 'center', borderWidth: 1, borderColor: '#2563eb', flex: 1 },
+  detailsButtonText: { color: '#2563eb', fontWeight: '800', fontSize: 13 },
+  arrowButton: { width: 44, height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#f9fafb' },
+  arrowButtonText: { color: '#111827', fontWeight: '900', fontSize: 20, marginTop: -2 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+Successfully created file c:\proyectos\aquitoy\mensajeria-app\src\app\(mensajero)\inicio.tsx.bak file. Completing... (truncated)
