@@ -24,7 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
-import { aceptarServicioApi, abandonarServicioApi, getServiciosApi, reportarNovedadApi, completarPasoApi, cerrarServicioApi } from '../../services/api';
+import { aceptarServicioApi, abandonarServicioApi, getServiciosApi, reportarNovedadApi, completarPasoApi, cerrarServicioApi, setRefreshStartedCallback, setRefreshCompletedCallback, getIsRefreshing } from '../../services/api';
 import { typography } from '../../theme/typography';
 
 const TAB_KEYS = ['progreso', 'disponibles', 'terminados'] as const;
@@ -475,6 +475,7 @@ export default function InicioMensajero() {
   const hitosCerrandoRef = useRef<Set<string>>(new Set());
   const serviciosCerrandoRef = useRef<Set<number>>(new Set());
   const isMountedRef = useRef(true);
+  const [isPausedDueToAuth, setIsPausedDueToAuth] = useState(false);
 
   const counts = {
     progreso: tabPagination.progreso.total || serviciosProgreso.length,
@@ -623,6 +624,7 @@ export default function InicioMensajero() {
 
   const cargarTab = useCallback(async (tabKey: TabKey, primerCarga = false) => {
     if (!usuario) return;
+    if (isPausedDueToAuth || getIsRefreshing()) return;
 
     if (!primerCarga) {
       setLoading(true);
@@ -649,10 +651,11 @@ export default function InicioMensajero() {
         setRefreshing(false);
       }
     }
-  }, [aplicarResultadoTab, usuario]);
+  }, [aplicarResultadoTab, usuario, isPausedDueToAuth]);
 
   const refreshAllTabs = useCallback(async () => {
     if (!usuario) return;
+    if (isPausedDueToAuth || getIsRefreshing()) return;
 
     setRefreshing(true);
 
@@ -676,10 +679,11 @@ export default function InicioMensajero() {
         setRefreshing(false);
       }
     }
-  }, [aplicarResultadoTab, usuario]);
+  }, [aplicarResultadoTab, usuario, isPausedDueToAuth]);
 
   const cargarMasServicios = useCallback(async (tabKey: TabKey) => {
     if (!usuario) return;
+    if (isPausedDueToAuth || getIsRefreshing()) return;
 
     const metadata = tabPagination[tabKey];
     if (!metadata.hasNext || metadata.loadingMore) return;
@@ -711,7 +715,7 @@ export default function InicioMensajero() {
         },
       }));
     }
-  }, [aplicarResultadoTab, tabPagination, usuario]);
+  }, [aplicarResultadoTab, tabPagination, usuario, isPausedDueToAuth]);
 
   const cerrarServicioDefinitivo = useCallback(async (servicioId: number) => {
     if (serviciosCerrandoRef.current.has(servicioId)) return;
@@ -732,6 +736,7 @@ export default function InicioMensajero() {
   const prefetchTabs = useCallback(async (tabsToLoad: TabKey[]) => {
     for (const tabKey of tabsToLoad) {
       if (loadedTabs[tabKey]) continue;
+      if (isPausedDueToAuth || getIsRefreshing()) return;
 
       try {
         const estado = tabKey === 'disponibles' ? 'sin_asignar' : 'terminado';
@@ -747,7 +752,7 @@ export default function InicioMensajero() {
         // Prefetch en segundo plano: si falla, la pestaña se carga al abrirse.
       }
     }
-  }, [aplicarResultadoTab, loadedTabs, usuario]);
+  }, [aplicarResultadoTab, loadedTabs, usuario, isPausedDueToAuth]);
 
   useEffect(() => {
     if (!usuario) return;
@@ -778,6 +783,16 @@ export default function InicioMensajero() {
     animateTabIndicator(tab);
     pagerRef.current?.scrollToOffset({ offset: TAB_KEYS.indexOf(tab) * width, animated: false });
   }, [animateTabIndicator, tab, usuario, width]);
+
+  useEffect(() => {
+    setRefreshStartedCallback(() => {
+      setIsPausedDueToAuth(true);
+    });
+
+    setRefreshCompletedCallback(() => {
+      setIsPausedDueToAuth(false);
+    });
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

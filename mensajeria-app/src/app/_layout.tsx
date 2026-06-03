@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { Stack, router, usePathname } from 'expo-router';
 import { AuthProvider, useAuth } from '../context/AuthContext';
-import { View, ActivityIndicator, Text, TextInput, Platform } from 'react-native';
+import { View, ActivityIndicator, Text, TextInput, Platform, Alert } from 'react-native';
 import { MD3LightTheme, PaperProvider } from 'react-native-paper';
 import { paperThemeFonts } from '../theme/utils';
+import { setRefreshFailedCallback } from '../services/api';
 
 const customTheme = {
   ...MD3LightTheme,
@@ -31,6 +32,13 @@ textInputDefaults.defaultProps.style = {
 function RootLayoutNav() {
   const { usuario, cargando, logout } = useAuth();
   const pathname = usePathname();
+
+  useEffect(() => {
+    setRefreshFailedCallback(() => {
+      void logout();
+      Alert.alert('Sesión expirada', 'Tu sesión ha expirado, por favor inicia sesión nuevamente');
+    });
+  }, [logout]);
 
   useEffect(() => {
     if (cargando) return;

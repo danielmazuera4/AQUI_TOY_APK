@@ -13,9 +13,11 @@ interface Usuario {
 interface AuthContextType {
   usuario: Usuario | null;
   token: string | null;
+  refreshToken: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   cargando: boolean;
+  updateTokens: (access: string, refresh: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -23,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -32,25 +35,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const cargarSesion = useCallback(async () => {
     try {
       const tokenGuardado = await AsyncStorage.getItem('token');
+      const refreshTokenGuardado = await AsyncStorage.getItem('refreshToken');
       const usuarioGuardado = await AsyncStorage.getItem('usuario');
-      if (tokenGuardado && usuarioGuardado) {
+      if (tokenGuardado && refreshTokenGuardado && usuarioGuardado) {
         let usuarioParsed: Usuario;
 
         try {
           usuarioParsed = JSON.parse(usuarioGuardado) as Usuario;
         } catch {
           await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('refreshToken');
           await AsyncStorage.removeItem('usuario');
           return;
         }
 
         if (usuarioParsed.rol !== 'mensajero') {
           await AsyncStorage.removeItem('token');
+          await AsyncStorage.removeItem('refreshToken');
           await AsyncStorage.removeItem('usuario');
           return;
         }
 
         setToken(tokenGuardado);
+        setRefreshToken(refreshTokenGuardado);
         setUsuario(usuarioParsed);
 
         const servicioActivo = await getActiveServiceId();
@@ -67,15 +74,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (username: string, password: string) => {
     const response = await loginApi(username, password);
-    const { access, usuario: usuarioLogueado } = response.data;
+    const { access, refresh, usuario: usuarioLogueado } = response.data;
 
     if (usuarioLogueado.rol !== 'mensajero') {
       throw new Error('Perfil no autorizado');
     }
 
     await AsyncStorage.setItem('token', access);
+    await AsyncStorage.setItem('refreshToken', refresh);
     await AsyncStorage.setItem('usuario', JSON.stringify(usuarioLogueado));
     setToken(access);
+    setRefreshToken(refresh);
     setUsuario(usuarioLogueado);
 
     const servicioActivo = await getActiveServiceId();
@@ -87,12 +96,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     await stopBackgroundTracking();
     await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('refreshToken');
     await AsyncStorage.removeItem('usuario');
     setToken(null);
+    setRefreshToken(null);
     setUsuario(null);
   }, []);
 
-  const value = useMemo(() => ({ usuario, token, login, logout, cargando }), [usuario, token, login, logout, cargando]);
+  const updateTokens = useCallback((access: string, refresh: string) => {
+    setToken(access);
+    setRefreshToken(refresh);
+    AsyncStorage.setItem('token', access);
+    AsyncStorage.setItem('refreshToken', refresh);
+  }, []);
+
+  const value = useMemo(() => ({ usuario, token, refreshToken, login, logout, cargando, updateTokens }), [usuario, token, refreshToken, login, logout, cargando, updateTokens]);
 
   return (
     <AuthContext.Provider value={value}>
