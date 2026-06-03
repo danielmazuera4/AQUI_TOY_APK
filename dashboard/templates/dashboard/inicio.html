@@ -1,5 +1,6 @@
 {% extends 'dashboard/base.html' %}
 {% load l10n %}
+{% load mensajero_tags %}
 {% block title %}AKI TOY — Panel de Servicios{% endblock %}
 
 {% block content %}
@@ -759,7 +760,7 @@
           </div>
           <div class="service-card-meta">
             <span><strong>Solicitante:</strong> {{ s.nombre_solicitante|default:"-" }}</span>
-            <span><strong>Mensajero:</strong> {{ s.mensajero.username|default:"Asignado" }}</span>
+            <span><strong>Mensajero:</strong> {{ s.mensajero|mensajero_con_rango|default:"Asignado" }}</span>
           </div>
           <div class="service-card-actions">
             <button class="btn-ver" type="button" onclick="abrirModal('{{ s.id }}')"><i class="fas fa-eye"></i> Ver</button>
@@ -792,7 +793,7 @@
           </div>
           <div class="service-card-meta">
             <span><strong>Solicitante:</strong> {{ s.nombre_solicitante|default:"-" }}</span>
-            <span><strong>Mensajero:</strong> {{ s.mensajero.username|default:"-" }}</span>
+            <span><strong>Mensajero:</strong> {{ s.mensajero|mensajero_con_rango|default:"-" }}</span>
           </div>
           <div class="service-card-actions">
             <button class="btn-ver" type="button" onclick="abrirModal('{{ s.id }}')"><i class="fas fa-eye"></i> Ver</button>
