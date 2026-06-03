@@ -1297,7 +1297,216 @@ async function ejecutarReversionConfirmada() {
     }
 
     cerrarModalConfirmarEliminarHito();
-    cerrarModal();
+    
+    // Re-fetch the service data and update the modal without closing it
+    const dataUrl = SERVICIO_DATA_URL_TEMPLATE.replace('/0/', `/${servicioActivoId}/`);
+    const dataRes = await fetch(dataUrl, { credentials: 'same-origin' });
+    if (!dataRes.ok) {
+      throw new Error(await leerMensajeError(dataRes));
+    }
+    const d = await dataRes.json();
+    servicioSeleccionadoData = d;
+    
+    // Re-render the modal body with updated data
+    const body = document.getElementById('m-body');
+    if (body) {
+      // Re-use the same rendering logic from abrirModal
+      const toTime = (fecha) => {
+        if (!fecha) return 0;
+        const parsed = new Date(fecha).getTime();
+        return Number.isNaN(parsed) ? 0 : parsed;
+      };
+
+      const seguimientos = (d.seguimientos || []).map((item) => ({
+        ...item,
+        tipo: 'seguimiento',
+        ordenTemporal: toTime(item.fecha),
+      }));
+      const novedades = (d.novedades || []).map((item) => ({
+        ...item,
+        tipo: 'novedad',
+        ordenTemporal: toTime(item.fecha),
+      }));
+      const historialHitos = [...seguimientos].sort((a, b) => {
+        if (a.ordenTemporal !== b.ordenTemporal) {
+          return a.ordenTemporal - b.ordenTemporal;
+        }
+        return (a.id || 0) - (b.id || 0);
+      });
+
+      const badgeMap = {
+        sin_asignar: '<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">Sin asignar</span>',
+        disponible: '<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800">Disponible</span>',
+        en_progreso: '<span class="inline-flex items-center rounded-full bg-gray-200 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-gray-800">En progreso</span>',
+        terminado:   '<span class="inline-flex items-center rounded-full bg-gray-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white">Terminado</span>',
+      };
+
+      const mensajeroHTML = d.mensajero
+        ? `
+          <button type="button" data-mensajero-open class="group w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:shadow-md">
+            <div class="flex items-start gap-4">
+              <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-red-600 text-lg font-bold text-white">
+                ${d.mensajero.foto_perfil ? `<img src="${escapeHtml(d.mensajero.foto_perfil)}" alt="${escapeHtml(d.mensajero.username)}" loading="lazy" class="h-full w-full object-cover">` : escapeHtml((d.mensajero.nombre_completo || d.mensajero.username || 'M').charAt(0).toUpperCase())}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">Mensajero Asignado</p>
+                    <h4 class="mt-1 truncate text-sm font-bold text-gray-900">${escapeHtml(d.mensajero.nombre_completo || d.mensajero.username || 'Mensajero')}</h4>
+                  </div>
+                  <span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-600">Ver</span>
+                </div>
+                <p class="mt-2 text-xs text-gray-500">Haz clic para abrir la ficha compacta con nombre, placa e información de contacto.</p>
+              </div>
+            </div>
+          </button>`
+        : `
+          <div class="rounded-2xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
+            <p class="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Mensajero Asignado</p>
+            <p class="mt-2">Sin mensajero asignado.</p>
+          </div>`;
+
+      body.innerHTML = `
+        <div class="grid grid-cols-1 gap-4">
+          <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Mensajero Asignado</p>
+            <div class="mt-3">${mensajeroHTML}</div>
+          </section>
+
+          <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Información del servicio</p>
+                <h3 class="mt-1 text-lg font-bold text-gray-900">Orden #${escapeHtml(d.orden)}</h3>
+                <p class="text-sm text-gray-500">${escapeHtml(d.estado_display || d.estado || '')}</p>
+              </div>
+              ${badgeMap[d.estado] || ''}
+            </div>
+          </section>
+
+          <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Seguimiento del servicio</p>
+            <div class="mt-4 space-y-2">
+              ${d.mensajero ? `
+                <div class="flex items-start gap-3 p-3 border border-gray-200 rounded-xl bg-gray-50">
+                  <div class="flex-shrink-0 w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold">1</div>
+                  <div class="flex-1">
+                    <p class="text-xs font-bold text-gray-900">Mensajero asignado</p>
+                    <p class="text-sm text-gray-600">${escapeHtml(d.mensajero.nombre_completo || d.mensajero.username || 'Mensajero')}</p>
+                  </div>
+                </div>` : ''}
+              ${historialHitos.length ? historialHitos.map((hito, index) => {
+                const pasoNum = index + (d.mensajero ? 2 : 1);
+                const descripcion = hito.descripcion || 'Sin descripción';
+                const fotoHTML = hito.foto ? `
+                  <button type="button" class="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md evidence-thumb" data-evidence-src="${escapeHtml(hito.foto)}" data-evidence-alt="Hito ${pasoNum}">
+                    <img src="${escapeHtml(hito.foto)}" alt="Hito ${pasoNum}" loading="lazy" class="h-24 w-full object-cover" />
+                  </button>` : '';
+
+                const isLastHito = index === historialHitos.length - 1;
+                const deleteButton = (isLastHito && IS_COORDINADOR) ? `
+                  <button type="button" onclick="confirmarYRevertirHito()" class="hito-delete" title="Eliminar último hito">
+                    <i class="fas fa-trash"></i>
+                  </button>` : '';
+
+                return `
+                  <div class="hito-item${isLastHito ? ' last-child' : ''}">
+                    <div class="hito-main">
+                      <div class="hito-head">
+                        <span class="hito-pill">Paso ${pasoNum}</span>
+                      </div>
+                      <p class="text-sm font-semibold text-gray-900">${escapeHtml(descripcion)}</p>
+                      ${fotoHTML}
+                    </div>
+                    ${deleteButton}
+                  </div>`;
+              }).join('') : ''}
+            </div>
+          </section>
+
+          ${novedades.length ? `
+          <section class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-red-600">Novedades del servicio</p>
+            <div class="mt-4 space-y-2">
+              ${novedades.sort((a, b) => toTime(a.fecha) - toTime(b.fecha)).map((novedad) => {
+                const fechaTexto = novedad.fecha ? new Date(novedad.fecha).toLocaleString('es-CO', { 
+                  year: 'numeric', 
+                  month: '2-digit', 
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : '';
+                return `
+                  <div class="flex items-center gap-3 p-3 border border-gray-200 rounded-xl bg-gray-50">
+                    <div class="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+                      <i class="fas fa-exchange-alt text-xs"></i>
+                    </div>
+                    <div class="flex-1">
+                      <p class="text-xs font-semibold text-gray-900">${escapeHtml(fechaTexto)} - ${escapeHtml(novedad.descripcion || '')}</p>
+                    </div>
+                  </div>`;
+              }).join('')}
+            </div>
+          </section>` : ''}
+        </div>
+      `;
+
+      // Re-attach event listeners for the new delete button
+      const newDeleteButton = body.querySelector('.hito-delete');
+      if (newDeleteButton) {
+        newDeleteButton.addEventListener('click', confirmarYRevertirHito);
+      }
+
+      // Re-attach event listeners for evidence thumbs
+      const lightbox = document.getElementById('evidence-lightbox');
+      const lightboxImage = document.getElementById('evidence-lightbox-image');
+      const lightboxClose = document.getElementById('evidence-lightbox-close');
+
+      const closeEvidenceLightbox = () => {
+        if (!lightbox || !lightboxImage) return;
+        lightbox.classList.add('hidden');
+        lightbox.classList.remove('flex');
+        lightboxImage.src = '';
+        document.body.style.overflow = '';
+      };
+
+      const openEvidenceLightbox = (src, alt) => {
+        if (!lightbox || !lightboxImage) return;
+        lightboxImage.src = src;
+        lightboxImage.alt = alt || 'Evidencia';
+        lightbox.classList.remove('hidden');
+        lightbox.classList.add('flex');
+        document.body.style.overflow = 'hidden';
+      };
+
+      document.querySelectorAll('.evidence-thumb').forEach((button) => {
+        button.addEventListener('click', () => {
+          openEvidenceLightbox(button.dataset.evidenceSrc, button.dataset.evidenceAlt);
+        });
+      });
+
+      if (lightboxClose) {
+        lightboxClose.addEventListener('click', closeEvidenceLightbox);
+      }
+
+      if (lightbox) {
+        lightbox.addEventListener('click', (event) => {
+          if (event.target === lightbox) {
+            closeEvidenceLightbox();
+          }
+        });
+      }
+    }
+    
+    // Update the estado badge in the modal header
+    const badgeMap = {
+      sin_asignar: '<span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-800">Sin asignar</span>',
+      disponible: '<span class="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-emerald-800">Disponible</span>',
+      en_progreso: '<span class="inline-flex items-center rounded-full bg-gray-200 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-gray-800">En progreso</span>',
+      terminado:   '<span class="inline-flex items-center rounded-full bg-gray-700 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-white">Terminado</span>',
+    };
+    
+    document.getElementById('m-sub').textContent = d.estado_display || d.estado;
     
     // Recargar la página para reflejar los cambios en los contadores y pestañas
     location.reload();
