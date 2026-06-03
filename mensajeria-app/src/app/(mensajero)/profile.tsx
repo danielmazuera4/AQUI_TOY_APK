@@ -180,12 +180,47 @@ export default function ProfileScreen() {
 
   const topPadding = useMemo(() => insets.top + 16, [insets.top]);
   const bottomPadding = useMemo(() => insets.bottom + 40, [insets.bottom]);
-  const levelProgress = 0.72;
   const weekDays = useMemo(() => buildWeekDays(weekStart), [weekStart]);
   const rangoConfiabilidad = useMemo(
     () => obtenerRangoConfiabilidad(serviciosHistorial.length, serviciosHistorial.length > 0 ? 100 : 0),
     [serviciosHistorial.length],
   );
+
+  const nivelInfo = useMemo(() => {
+    const totalServicios = serviciosHistorial.length;
+    const efectividad = totalServicios > 0 ? 100 : 0;
+
+    const niveles = [
+      { nombre: 'Piloto Novato', minServicios: 0 },
+      { nombre: 'Piloto Verificado', minServicios: 30 },
+      { nombre: 'Piloto Élite', minServicios: 100 },
+      { nombre: 'Piloto Diamante', minServicios: 250 },
+    ];
+
+    let nivelActual = niveles[0];
+    let nivelSiguiente: typeof niveles[0] | null = niveles[1];
+    let serviciosFaltantes = 0;
+
+    for (let i = 0; i < niveles.length; i++) {
+      if (totalServicios >= niveles[i].minServicios) {
+        nivelActual = niveles[i];
+        if (i < niveles.length - 1) {
+          nivelSiguiente = niveles[i + 1];
+          serviciosFaltantes = nivelSiguiente.minServicios - totalServicios;
+        } else {
+          nivelSiguiente = null;
+          serviciosFaltantes = 0;
+        }
+      }
+    }
+
+    return {
+      nivelActual: nivelActual.nombre,
+      nivelSiguiente: nivelSiguiente?.nombre || null,
+      serviciosFaltantes,
+      esMaximo: nivelSiguiente === null,
+    };
+  }, [serviciosHistorial.length]);
 
   useEffect(() => {
     let isMounted = true;
@@ -346,14 +381,14 @@ export default function ProfileScreen() {
         <Text style={[styles.title, typography.title]}>Valentina</Text>
         <Text style={[styles.rankText, styles.lightText]}>{`${rangoConfiabilidad.nombre} ${rangoConfiabilidad.icono}`}</Text>
 
-        <View style={styles.levelBarWrap}>
-          <View style={styles.levelBarTrack}>
-            <View style={[styles.levelBarFill, { width: `${levelProgress * 100}%` }]} />
-          </View>
-          <View style={styles.levelBarMetaRow}>
-            <Text style={[styles.levelBarMeta, styles.lightText]}>XP 7,240 / 10,000</Text>
-            <Text style={[styles.levelBarMeta, styles.lightText]}>72%</Text>
-          </View>
+        <View style={styles.levelInfoWrap}>
+          {nivelInfo.esMaximo ? (
+            <Text style={[styles.levelInfoText, styles.levelInfoTextMax]}>¡Nivel Máximo Alcanzado!</Text>
+          ) : (
+            <Text style={[styles.levelInfoText, styles.levelInfoTextHighlight]}>
+              ¡Faltan {nivelInfo.serviciosFaltantes} servicios para subir a {nivelInfo.nivelSiguiente}!
+            </Text>
+          )}
         </View>
       </View>
 
@@ -560,13 +595,18 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'android' ? 'sans-serif-light' : 'HelveticaNeue-Light',
     fontWeight: '400',
   },
-  levelBarWrap: { width: '100%', marginTop: 4, gap: 6 },
-  levelBarTrack: { height: 10, borderRadius: 999, backgroundColor: '#E5E7EB', overflow: 'hidden' },
-  levelBarFill: { height: '100%', borderRadius: 999, backgroundColor: '#111827' },
-  levelBarMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  levelBarMeta: {
-    fontSize: 12,
-    color: '#6B7280',
+  levelInfoWrap: { width: '100%', marginTop: 4, alignItems: 'center' },
+  levelInfoText: {
+    fontFamily: Platform.OS === 'android' ? 'sans-serif-light' : 'HelveticaNeue-Light',
+    fontSize: 14,
+    fontWeight: '400',
+    textAlign: 'center',
+  },
+  levelInfoTextHighlight: {
+    color: '#DC2626',
+  },
+  levelInfoTextMax: {
+    color: '#DC2626',
   },
   content: { padding: 16, gap: 14 },
   weekCard: {
