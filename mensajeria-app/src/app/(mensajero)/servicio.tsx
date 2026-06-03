@@ -263,6 +263,35 @@ export default function DetalleServicio() {
           <View style={styles.modalCard}>
             <ScrollView contentContainerStyle={styles.modalScroll} showsVerticalScrollIndicator={false}>
               <Text style={styles.modalTitle}>Detalle del servicio</Text>
+              {servicio?.novedades?.filter((n: any) => n.descripcion.includes('Servicio abandonado por')).length > 0 && (
+                <View style={{ backgroundColor: '#FFF0F0', borderLeftWidth: 4, borderLeftColor: '#C8102E', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                  <Text style={{ color: '#9B1C1C', fontWeight: 'bold', fontSize: 15, marginBottom: 8 }}>
+                     ⚠️ Historial de abandonos
+                  </Text>
+                  {servicio.novedades
+                    .filter((n: any) => n.descripcion.includes('Servicio abandonado por'))
+                    .map((novedad: any, index: number) => {
+                      const match = novedad.descripcion.match(/Servicio abandonado por (.+)\. Motivo: (.+)/);
+                      const nombre = match ? match[1] : 'Desconocido';
+                      const motivo = match ? match[2] : novedad.descripcion;
+                      
+                      return (
+                        <View key={novedad.id || index} style={{ marginBottom: 10, borderTopWidth: index === 0 ? 0 : 0.5, borderTopColor: 'rgba(200, 16, 46, 0.2)', paddingTop: index === 0 ? 0 : 8 }}>
+                          <Text style={{ color: '#6B7280', fontSize: 11, marginBottom: 2 }}>
+                            {new Date(novedad.fecha).toLocaleString('es-CO')}
+                          </Text>
+                          <Text style={{ color: '#9B1C1C', fontSize: 13 }}>
+                            <Text style={{ fontWeight: 'bold' }}>Mensajero: </Text>{nombre}
+                          </Text>
+                          <Text style={{ color: '#9B1C1C', fontSize: 13 }}>
+                            <Text style={{ fontWeight: 'bold' }}>Motivo: </Text>{motivo}
+                          </Text>
+                        </View>
+                      );
+                    })
+                  }
+                </View>
+              )}
               <View style={styles.modalGrid}>
                 {detalles.map(([label, value], index) => (
                   <Text key={`detalle-${index}`}>

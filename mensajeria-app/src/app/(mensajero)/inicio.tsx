@@ -1261,27 +1261,35 @@ export default function InicioMensajero() {
         <Pressable style={styles.modalOverlay} onPress={() => setDetalleVisible(false)}>
           <Pressable style={styles.modalCard} onPress={() => null}>
             <Text style={styles.modalTitle}>Detalle del servicio</Text>
-            {(() => {
-              const motivoAbandono = servicioEnDetalle?.motivo_abandono;
-              if (!motivoAbandono) return null;
-              const match = motivoAbandono.match(/Servicio abandonado por (.+)\. Motivo: (.+)/);
-              if (!match) return null;
-              const nombre = match[1];
-              const motivo = match[2];
-              return (
-                <View style={{ backgroundColor: '#FFF0F0', borderLeftWidth: 4, borderLeftColor: '#C8102E', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ color: '#9B1C1C', fontWeight: 'normal', fontSize: 15, marginBottom: 4 }}>
-                     ⚠️ Novedades de abandono
-                  </Text>
-                  <Text style={{ color: '#9B1C1C', fontWeight: 'normal', fontSize: 13 }}>
-                    Abandonado por: {nombre}
-                  </Text>
-                  <Text style={{ color: '#9B1C1C', fontWeight: 'normal', fontSize: 13 }}>
-                    Motivo: {motivo}
-                  </Text>
-                </View>
-              );
-            })()}
+            {servicioEnDetalle?.novedades?.filter((n: any) => n.descripcion.includes('Servicio abandonado por')).length > 0 && (
+              <View style={{ backgroundColor: '#FFF0F0', borderLeftWidth: 4, borderLeftColor: '#C8102E', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+                <Text style={{ color: '#9B1C1C', fontWeight: 'bold', fontSize: 15, marginBottom: 8 }}>
+                   ⚠️ Historial de abandonos
+                </Text>
+                {servicioEnDetalle.novedades
+                  .filter((n: any) => n.descripcion.includes('Servicio abandonado por'))
+                  .map((novedad: any, index: number) => {
+                    const match = novedad.descripcion.match(/Servicio abandonado por (.+)\. Motivo: (.+)/);
+                    const nombre = match ? match[1] : 'Desconocido';
+                    const motivo = match ? match[2] : novedad.descripcion;
+                    
+                    return (
+                      <View key={novedad.id || index} style={{ marginBottom: 10, borderTopWidth: index === 0 ? 0 : 0.5, borderTopColor: 'rgba(200, 16, 46, 0.2)', paddingTop: index === 0 ? 0 : 8 }}>
+                        <Text style={{ color: '#6B7280', fontSize: 11, marginBottom: 2 }}>
+                          {new Date(novedad.fecha).toLocaleString('es-CO')}
+                        </Text>
+                        <Text style={{ color: '#9B1C1C', fontSize: 13 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Mensajero: </Text>{nombre}
+                        </Text>
+                        <Text style={{ color: '#9B1C1C', fontSize: 13 }}>
+                          <Text style={{ fontWeight: 'bold' }}>Motivo: </Text>{motivo}
+                        </Text>
+                      </View>
+                    );
+                  })
+                }
+              </View>
+            )}
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.modalLine}><Text style={styles.modalLabel}>Orden: </Text>{texto(servicioEnDetalle?.orden)}</Text>
               <Text style={styles.modalLine}><Text style={styles.modalLabel}>Empresa: </Text>{empresa(servicioEnDetalle)}</Text>
