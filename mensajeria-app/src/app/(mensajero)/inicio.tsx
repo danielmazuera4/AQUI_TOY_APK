@@ -33,6 +33,8 @@ const EVIDENCE_PASOS = [2, 3] as const;
 const NOVEDAD_OPCIONES = ['Trancón / Tráfico', 'Problema mecánico', 'Dirección incorrecta', 'Cliente no contesta', 'Otros...'] as const;
 const ABANDONO_OPCIONES = ['Falla mecánica', 'Problema de tránsito', 'Paquete muy grande', 'Emergencia personal', 'Otro'] as const;
 const PAGE_SIZE = 15;
+// Timer global para evitar ráfagas de red (Debounce)
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 const crearProgresoStorageKey = (servicioId: number) => `@servicio_${servicioId}_progreso`;
 
 type TabPaginationState = {
@@ -658,31 +660,44 @@ export default function InicioMensajero() {
   }, [aplicarResultadoTab, usuario, isPausedDueToAuth]);
 
   const refreshAllTabs = useCallback(async () => {
-    if (!usuario) return;
-    if (isPausedDueToAuth || getIsRefreshing()) return;
+    // 1. Si entra una nueva petición en menos de 300ms, cancelamos la anterior
+    if (debounceTimer) clearTimeout(debounceTimer);
 
-    setRefreshing(true);
+    // 2. Iniciamos un nuevo reloj de 300ms
+    debounceTimer = setTimeout(async () => {
+      // Todo el bloque original va aquí adentro
+      if (!usuario || isPausedDueToAuth || getIsRefreshing()) return;
 
-    try {
-      const promises = TAB_KEYS.map(async (tabKey) => {
-        const estado = tabKey === 'progreso' ? 'en_progreso' : tabKey === 'disponibles' ? 'sin_asignar' : 'terminado';
-        const response = await getServiciosApi(estado, 1, PAGE_SIZE);
-        const { lista, total, hasNext } = extraerRespuestaLista(response?.data);
+      setRefreshing(true);
+      try {
+        const results = await Promise.all(
+          TAB_KEYS.map(async (tabKey) => {
+            const estado = tabKey === 'progreso' ? 'en_progreso' : tabKey === 'disponibles' ? 'sin_asignar' : 'terminado';
+            const response = await getServiciosApi(estado, 1, PAGE_SIZE);
+            return { tabKey, data: response?.data };
+          })
+        );
 
         if (!isMountedRef.current) return;
 
-        aplicarResultadoTab(tabKey, lista, false, total, hasNext, 1);
+        // Limpieza fundamental antes de setear para evitar duplicados en la UI
+        setServiciosProgreso([]);
+        setServiciosDisponibles([]);
+        setServiciosTerminados([]);
 
-        setLoadedTabs((prev) => ({ ...prev, [tabKey]: true }));
-      });
-
-      await Promise.all(promises);
-    } catch (error: any) {
-    } finally {
-      if (isMountedRef.current) {
-        setRefreshing(false);
+        for (const res of results) {
+          const { lista, total, hasNext } = extraerRespuestaLista(res.data);
+          await aplicarResultadoTab(res.tabKey, lista, false, total, hasNext, 1);
+          setLoadedTabs((prev) => ({ ...prev, [res.tabKey]: true }));
+        }
+      } catch (error: any) {
+        console.error(error);
+      } finally {
+        if (isMountedRef.current) {
+          setRefreshing(false);
+        }
       }
-    }
+    }, 300); // 👈 300 milisegundos de espera
   }, [aplicarResultadoTab, usuario, isPausedDueToAuth]);
 
   const cargarMasServicios = useCallback(async (tabKey: TabKey) => {
@@ -798,30 +813,32 @@ export default function InicioMensajero() {
     });
   }, []);
 
+  // Ref para mantener la función de refresco siempre actualizada sin disparar re-ejecuciones de efectos
+  const refreshAllTabsRef = useRef(refreshAllTabs);
+  useEffect(() => {
+    refreshAllTabsRef.current = refreshAllTabs;
+  }, [refreshAllTabs]);
+
   useFocusEffect(
     useCallback(() => {
-      if (usuario) {
-        // PROHIBIDO: No limpiar los estados de forma preventiva o agresiva bajo ninguna circunstancia.
-        setSelectedIds([]);
-        setExpandedId(null);
-        setServicioEnDetalle(null);
-        setDetalleVisible(false);
-        setModalHitoVisible(false);
-        setServicioHito(null);
-        setPasoHito(null);
-        setEnviandoHito(false);
-        setDescripcionHito('');
-        setFotoHitoUri(null);
-        setMenuHitoFotoVisible(false);
-        setNovedadModalVisible(false);
-        setNovedadSeleccionada('');
-        setNovedadTextoOtros('');
-        setNovedadServicio(null);
-        
-        // Inmediatamente después, hacer el fetch a la API
-        void refreshAllTabs();
-      }
-    }, [usuario, refreshAllTabs])
+      setSelectedIds([]);
+      setExpandedId(null);
+      setServicioEnDetalle(null);
+      setDetalleVisible(false);
+      setModalHitoVisible(false);
+      setServicioHito(null);
+      setPasoHito(null);
+      setEnviandoHito(false);
+      setDescripcionHito('');
+      setFotoHitoUri(null);
+      setMenuHitoFotoVisible(false);
+      setNovedadModalVisible(false);
+      setNovedadSeleccionada('');
+      setNovedadTextoOtros('');
+      setNovedadServicio(null);
+
+      void refreshAllTabsRef.current();
+    }, []) // Array vacío: Solo se ejecuta al ganar el foco real de navegación
   );
 
   function toggleSelected(id: number) {
