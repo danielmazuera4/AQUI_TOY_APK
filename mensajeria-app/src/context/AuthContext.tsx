@@ -73,12 +73,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
+    // Clear previous state before setting new user
+    setToken(null);
+    setRefreshToken(null);
+    setUsuario(null);
+
     const response = await loginApi(username, password);
     const { access, refresh, usuario: usuarioLogueado } = response.data;
 
     if (usuarioLogueado.rol !== 'mensajero') {
       throw new Error('Perfil no autorizado');
     }
+
+    console.log('Login exitoso para usuario:', usuarioLogueado.username || usuarioLogueado.first_name);
 
     await AsyncStorage.setItem('token', access);
     await AsyncStorage.setItem('refreshToken', refresh);

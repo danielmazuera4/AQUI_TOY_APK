@@ -158,6 +158,9 @@ export const loginApi = (username: string, password: string) =>
 export const refreshTokenApi = (refresh: string) =>
   requestWithFallback((client) => client.post('usuarios/token/refresh/', { refresh }));
 
+export const getPerfilApi = () =>
+  requestWithFallback((client) => client.get('usuarios/me/'));
+
 // Servicios
 export const getServiciosApi = async (estado?: string, page = 1, pageSize = 15) => {
   try {

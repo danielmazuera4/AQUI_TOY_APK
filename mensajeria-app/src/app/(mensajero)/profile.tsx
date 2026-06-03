@@ -5,7 +5,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { typography } from '../../theme/typography';
-import { getServiciosApi } from '../../services/api';
+import { getServiciosApi, getPerfilApi } from '../../services/api';
 
 type DayActivity = {
   dateKey: string;
@@ -177,6 +177,23 @@ export default function ProfileScreen() {
   const [selectionEnd, setSelectionEnd] = useState<string | null>(null);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
   const [serviciosHistorial, setServiciosHistorial] = useState<ServicioPerfil[]>([]);
+  const [perfilFresco, setPerfilFresco] = useState<any>(null);
+
+  // Fetch fresh profile data on component mount
+  useEffect(() => {
+    const obtenerPerfilFresco = async () => {
+      try {
+        console.log('Obteniendo perfil fresco del servidor...');
+        const response = await getPerfilApi();
+        setPerfilFresco(response.data);
+        console.log('Perfil cargado exitosamente para:', response.data.username || response.data.first_name || response.data.nombre);
+      } catch (error) {
+        console.error('Error al obtener perfil fresco:', error);
+      }
+    };
+
+    obtenerPerfilFresco();
+  }, []);
 
   const topPadding = useMemo(() => insets.top + 16, [insets.top]);
   const bottomPadding = useMemo(() => insets.bottom + 40, [insets.bottom]);
@@ -233,6 +250,8 @@ export default function ProfileScreen() {
           if (isMounted) setServiciosHistorial([]);
           return;
         }
+
+        console.log('ID del usuario actual:', usuario.id);
 
         const response = await getServiciosApi('terminado');
         const lista = normalizarLista(response?.data)
@@ -378,7 +397,9 @@ export default function ProfileScreen() {
         <View style={styles.avatarWrap}>
           <MaterialCommunityIcons name="account-circle" size={78} color="#27272A" />
         </View>
-        <Text style={[styles.title, typography.title]}>Valentina</Text>
+        <Text style={[styles.title, typography.title]}>
+          {perfilFresco?.first_name || perfilFresco?.username || usuario?.username || 'Cargando...'}
+        </Text>
         <Text style={[styles.rankText, styles.lightText]}>{`${rangoConfiabilidad.nombre} ${rangoConfiabilidad.icono}`}</Text>
 
         <View style={styles.levelInfoWrap}>
