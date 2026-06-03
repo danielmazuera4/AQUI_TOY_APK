@@ -66,24 +66,16 @@ class ServiciosView(APIView):
         servicios = Servicio.objects.filter(empresa=request.user.empresa).select_related(
             'empresa',
             'creado_por',
+            'creado_por__empresa', # Asegura que la empresa del creador se cargue
             'cliente',
-            'cliente__empresa',
+            'cliente__empresa',    # Asegura que la empresa del cliente se cargue
             'mensajero',
-        ).prefetch_related('seguimientos').distinct().only(
-            'id', 'orden', 'descripcion', 'sede', 'area',
-            'nombre_solicitante', 'telefono_solicitante',
-            'ciudad_origen', 'ciudad_destino',
-            'origen', 'destino', 'fecha_entrega_deseada',
-            'nombre_quien_recibe', 'telefono_quien_recibe',
-            'tipo_servicio', 'tipo_pago', 'descripcion_pago', 'tipo_recorrido',
-            'tipo_vehiculo', 'prioridad', 'estado', 'empresa_id', 'creado_por_id',
-            'cliente_id', 'mensajero_id', 'fecha_creacion',
-            'origen_lat', 'origen_lng', 'destino_lat', 'destino_lng',
-            'mensajero_lat', 'mensajero_lng', 'mensajero_ubicacion_actualizada_en',
-        )
+        ).prefetch_related('seguimientos', 'novedades').distinct()
+        # Se elimina .only() para permitir que el Serializer acceda a los campos anidados.
+        # Si el rendimiento es crítico, se puede reintroducir un .only() más específico.
 
         if request.user.rol == 'cliente':
-            servicios = servicios.filter(creado_por=request.user)
+            servicios = servicios.filter(cliente=request.user) # Filtrar por cliente, no por creado_por
         elif request.user.rol == 'mensajero':
             if estado == 'sin_asignar':
                 servicios = servicios.filter(estado='sin_asignar')

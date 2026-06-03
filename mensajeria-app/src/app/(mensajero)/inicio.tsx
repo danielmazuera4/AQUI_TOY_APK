@@ -68,7 +68,11 @@ function texto(valor: any) {
 }
 
 function empresa(servicio: any) {
-  return servicio?.cliente?.empresa?.nombre || servicio?.creado_por?.empresa?.nombre || servicio?.cliente?.username || servicio?.creado_por?.username || '-';
+  const companyName = servicio?.empresa_creado_por_nombre || servicio?.empresa_cliente_nombre;
+  if (companyName) {
+    return companyName.toUpperCase();
+  }
+  return 'PARTICULAR';
 }
 
 function mensajeroId(servicio: any) {
@@ -1538,10 +1542,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
   },
   cardSelected: { backgroundColor: '#FFF7F7', borderColor: '#E53935' },
-  cardSelectedDisponible: { backgroundColor: '#EEF8EE', borderColor: '#66BB6A' },
+  cardSelectedDisponible: { backgroundColor: '#EEF8EE', borderColor: '#66BB6A' }, // Mantener este estilo si es necesario
   cardSelectedProgreso: { borderColor: '#E53935' },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 },
-  cardTitle: { fontSize: 18, color: '#111827', marginBottom: 8 },
+  cardTitle: { fontSize: 14, color: '#111827', marginBottom: 8, fontWeight: 'bold' },
   priorityWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   priorityText: { color: '#E53935', fontSize: 12, fontWeight: '900', borderWidth: 1, borderColor: '#E53935', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
   priorityIcon: { color: '#E53935', fontSize: 18, marginTop: -2 },
