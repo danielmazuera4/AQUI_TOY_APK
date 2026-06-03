@@ -176,14 +176,14 @@ const ServiceCard = memo(function ServiceCard({
   const puedeExpandirTimeline = tab !== 'disponibles';
 
   // REGLA 1: LA BASE DE DATOS MANDA (ESPEJO PASIVO)
-  const hito2ExisteEnBackend = Boolean(servicio.seguimientos?.find((s: any) => Number(s.paso) === 2));
-  const hito3ExisteEnBackend = Boolean(servicio.seguimientos?.find((s: any) => Number(s.paso) === 3));
+  const hito2ExisteEnBackend = Boolean(servicio.seguimientos?.find((s: any) => Number(s.paso) === 2)?.completado);
+  const hito3ExisteEnBackend = Boolean(servicio.seguimientos?.find((s: any) => Number(s.paso) === 3)?.completado);
 
-  // REGLA 2: FORZAR ESTADO GRIS Y LIBRE SI NO EXISTE EN BACKEND
-  const fotoPaso2 = hito2ExisteEnBackend;
-  const descripcionPaso2 = hito2ExisteEnBackend;
-  const fotoPaso3 = hito3ExisteEnBackend;
-  const descripcionPaso3 = hito3ExisteEnBackend;
+  // REGLA 2: USAR ESTADO LOCAL PARA LA APARIENCIA INMEDIATA DEL BOTÓN
+  const fotoPaso2 = estadoPaso2.fotoSubida;
+  const descripcionPaso2 = estadoPaso2.descripcionEscrita;
+  const fotoPaso3 = estadoPaso3.fotoSubida;
+  const descripcionPaso3 = estadoPaso3.descripcionEscrita;
 
   const paso2Completo = hito2ExisteEnBackend;
   const paso3Completo = hito3ExisteEnBackend;
@@ -359,11 +359,11 @@ const ServiceCard = memo(function ServiceCard({
                   <Text style={styles.timelineText}>{texto(servicio?.origen)}</Text>
                   <View style={styles.timelineControlsRow}>
                     <View style={styles.timelineActionsGroup}>
-                      {!esSoloLectura && renderActionButton(
-                        'Subir Foto',
+                      {!esSoloLectura && renderActionButton( // Subir Foto Paso 2
+                        fotoPaso2 ? 'Evidencia Capturada' : 'Subir Foto',
                         'camera-outline',
                         fotoPaso2,
-                        !paso2Activo,
+                        !paso2Activo || fotoPaso2, // Deshabilitar si ya hay foto
                         () => onPickImage?.(servicio, 2),
                       )}
                       {!esSoloLectura && renderActionButton(
@@ -389,11 +389,11 @@ const ServiceCard = memo(function ServiceCard({
                   <Text style={styles.timelineText}>{texto(servicio?.destino)}</Text>
                   <View style={styles.timelineControlsRow}>
                     <View style={styles.timelineActionsGroup}>
-                      {!esSoloLectura && renderActionButton(
-                        'Subir Foto',
+                      {!esSoloLectura && renderActionButton( // Subir Foto Paso 3
+                        fotoPaso3 ? 'Evidencia Capturada' : 'Subir Foto',
                         'camera-outline',
                         fotoPaso3,
-                        !paso3Activo,
+                        !paso3Activo || fotoPaso3, // Deshabilitar si ya hay foto
                         () => onPickImage?.(servicio, 3),
                       )}
                       {!esSoloLectura && renderActionButton(
