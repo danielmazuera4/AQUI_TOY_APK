@@ -158,3 +158,13 @@ class Novedad(models.Model):
     class Meta:
         verbose_name = "Novedad"
         verbose_name_plural = "Novedades"
+
+class UbicacionMensajero(models.Model):
+    """Modelo para rastrear la ubicación exacta del mensajero por servicio"""
+    servicio = models.OneToOneField(Servicio, on_delete=models.CASCADE, related_name='ubicacion_tiempo_real')
+    latitud = models.DecimalField(max_digits=9, decimal_places=6)
+    longitud = models.DecimalField(max_digits=9, decimal_places=6)
+    fecha = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Ubicación Orden #{self.servicio.orden} - {self.fecha}"

@@ -9,7 +9,7 @@ from django.db import transaction
 from django.db.models import Sum, Count, Max
 from django.utils import timezone
 from datetime import datetime
-from .models import Servicio, Seguimiento, Novedad
+from .models import Servicio, Seguimiento, Novedad, UbicacionMensajero
 from .serializers import ServicioSerializer, ServicioResumenSerializer, SeguimientoSerializer, NovedadSerializer
 from usuarios.models import Usuario
 import random
@@ -188,7 +188,27 @@ class ActualizarUbicacionMensajeroView(APIView):
         servicio.mensajero_ubicacion_actualizada_en = timezone.now()
         servicio.save(update_fields=['mensajero_lat', 'mensajero_lng', 'mensajero_ubicacion_actualizada_en'])
 
+        # Actualizar o crear en el modelo de ubicación en tiempo real
+        UbicacionMensajero.objects.update_or_create(
+            servicio=servicio,
+            defaults={'latitud': latitud, 'longitud': longitud}
+        )
+
         return Response(ServicioSerializer(servicio).data)
+
+class UltimaUbicacionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            ubicacion = UbicacionMensajero.objects.get(servicio__pk=pk, servicio__empresa=request.user.empresa)
+            return Response({
+                'latitud': float(ubicacion.latitud),
+                'longitud': float(ubicacion.longitud),
+                'fecha': ubicacion.fecha
+            })
+        except UbicacionMensajero.DoesNotExist:
+            return Response({'error': 'Ubicación no disponible'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class AceptarServicioView(APIView):

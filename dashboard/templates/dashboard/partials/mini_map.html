@@ -1,26 +1,96 @@
 {% load l10n %}
 
 <div
-    id="{{ map_id }}"
-    class="mini-map"
-    data-service-id="{{ servicio.id }}"
-    data-api-url="/api/servicios/{{ servicio.id }}/"
-    data-origin-lat="{{ servicio.origen_lat|unlocalize|default_if_none:'' }}"
-    data-origin-lng="{{ servicio.origen_lng|unlocalize|default_if_none:'' }}"
-    data-destination-lat="{{ servicio.destino_lat|unlocalize|default_if_none:'' }}"
-    data-destination-lng="{{ servicio.destino_lng|unlocalize|default_if_none:'' }}"
-    data-courier-lat="{{ servicio.mensajero_lat|unlocalize|default_if_none:'' }}"
-    data-courier-lng="{{ servicio.mensajero_lng|unlocalize|default_if_none:'' }}"
+    id="map-container"
+    class="mini-map border rounded overflow-hidden"
 >
-    <div class="mini-map__canvas" aria-label="Mapa en tiempo real del servicio"></div>
-    <iframe
-        class="mini-map__frame"
-        title="Mapa de seguimiento del servicio"
-        loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade"
-        allowfullscreen
-    ></iframe>
-    <button type="button" class="mini-map__expand-btn" data-mini-map-expand>Ampliar mapa</button>
-    <div class="mini-map__fallback">Todavía no hay coordenadas para mostrar el mapa.</div>
-    <div class="mini-map__legend"></div>
+    <input type="hidden" id="servicio-id" value="{{ servicio.id }}">
+    <div id="google-map" style="height: 450px; width: 100%;" aria-label="Mapa en tiempo real del servicio"></div>
+    <div id="map-no-location" class="alert alert-warning m-2 d-none">
+        El mensajero aún no ha iniciado el recorrido o no tiene ubicación disponible.
+    </div>
+    
+    <div class="p-2 border-top bg-light">
+        <button type="button" id="btn-actualizar-mapa" class="btn btn-primary btn-sm">
+            Actualizar ubicación
+        </button>
+    </div>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAct3GRpIYIzZouX_-ctsQbHVwjPTGt4sQ&callback=initMap&libraries=places" async defer></script>
+    <script>
+        let map, directionsService, directionsRenderer;
+        let markerMensajero, markersHitos = [];
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("google-map"), {
+                zoom: 13,
+                center: { lat: 3.4516, lng: -76.5319 },
+                mapTypeControl: false
+            });
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                suppressMarkers: true,
+                polylineOptions: { strokeColor: "#C8102E", strokeWeight: 5 }
+            });
+            directionsRenderer.setMap(map);
+        }
+
+        async function actualizarTodo(servicioId) {
+            try {
+                const [resUbic, resServ] = await Promise.all([
+                    fetch(`/api/servicios/${servicioId}/ultima-ubicacion/`),
+                    fetch(`/api/servicios/${servicioId}/`)
+                ]);
+                if (!resUbic.ok) throw new Error("Sin ubicación");
+                const ubic = await resUbic.json();
+                const serv = await resServ.json();
+                const posMensajero = { lat: parseFloat(ubic.latitud), lng: parseFloat(ubic.longitud) };
+
+                if (markerMensajero) markerMensajero.setMap(null);
+                markersHitos.forEach(m => m.setMap(null));
+                markersHitos = [];
+
+                markerMensajero = new google.maps.Marker({
+                    position: posMensajero, map,
+                    icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 5, fillColor: "#1a1a1a", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 1 },
+                    title: "Mensajero"
+                });
+
+                const letras = ['A','B','C','D'];
+                const hitos = (serv.seguimientos || []).filter(s => s.paso >= 2).sort((a,b) => a.paso - b.paso);
+                hitos.forEach((h, i) => {
+                    const lat = h.lat || (h.paso === 2 ? serv.origen_lat : serv.destino_lat);
+                    const lng = h.lng || (h.paso === 2 ? serv.origen_lng : serv.destino_lng);
+                    if (!lat || !lng) return;
+                    markersHitos.push(new google.maps.Marker({
+                        position: { lat: parseFloat(lat), lng: parseFloat(lng) }, map,
+                        label: { text: letras[i], color: "#fff", fontWeight: "bold" },
+                        icon: { path: google.maps.SymbolPath.CIRCLE, fillColor: h.completado ? "#22C55E" : "#EF4444", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2, scale: 14 }
+                    }));
+                });
+
+                const siguiente = hitos.find(h => !h.completado);
+                if (siguiente) {
+                    const dLat = siguiente.lat || (siguiente.paso === 2 ? serv.origen_lat : serv.destino_lat);
+                    const dLng = siguiente.lng || (siguiente.paso === 2 ? serv.origen_lng : serv.destino_lng);
+                    directionsService.route({
+                        origin: posMensajero,
+                        destination: { lat: parseFloat(dLat), lng: parseFloat(dLng) },
+                        travelMode: google.maps.TravelMode.DRIVING
+                    }, (result, status) => {
+                        if (status === 'OK') directionsRenderer.setDirections(result);
+                    });
+                }
+                document.getElementById('map-no-location')?.classList.add('d-none');
+            } catch (e) {
+                document.getElementById('map-no-location')?.classList.remove('d-none');
+            }
+        }
+
+        document.getElementById('btn-actualizar-mapa')?.addEventListener('click', () => {
+            const id = document.getElementById('servicio-id')?.value;
+            if (id) actualizarTodo(id);
+        });
+    </script>
+</div>
 </div>

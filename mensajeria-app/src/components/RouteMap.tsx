@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, Alert, PermissionsAndroid, Platform } from 'react-native';
+import { View, StyleSheet, Alert, PermissionsAndroid, Platform, Text } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { fetchGoogleDirections, decodePolyline } from '../services/googleDirections';
@@ -145,6 +145,7 @@ export function RouteMap({
         ultimaRutaCalculada.current = resultado.decodedPoints;
       }
     } catch (error) {
+      Alert.alert('Error de Mapa', 'No se pudo trazar la ruta por calles. Verifique su conexión o API Key.');
       console.error('Error al calcular ruta:', error);
     } finally {
       setCargandoRuta(false);
@@ -157,55 +158,35 @@ export function RouteMap({
     return hitosPendientes.length > 0 ? hitosPendientes[0] : null;
   }, [hitosLocales]);
 
-  // Iniciar rastreo GPS
+  // Iniciar rastreo GPS optimizado (solo por distancia)
   useEffect(() => {
     if (!permisoConcedido || servicioFinalizado) return;
 
     const iniciarRastreo = async () => {
       try {
+        if (watchId.current) await watchId.current.remove();
+        
         watchId.current = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.BestForNavigation,
-            timeInterval: 5000, // Actualizar cada 5 segundos
-            distanceInterval: 10, // O cuando se mueva 10 metros
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 50, // Reportar solo cada 50 metros
           },
           (location) => {
             setUbicacionActual(location);
-            
-            // Verificar desvío de ruta
-            if (ruta.length > 0 && ultimaUbicacionEnRuta.current) {
-              const distancia = calcularDistanciaARuta(
-                { lat: location.coords.latitude, lng: location.coords.longitude },
-                ruta
-              );
-              
-              if (distancia > DEVIO_MAXIMO_METROS) {
-                console.log('Desvío detectado, recalculando ruta...');
-                const siguiente = determinarSiguienteHito();
-                if (siguiente && siguiente.lat && siguiente.lng) {
-                  calcularRuta(
-                    { lat: location.coords.latitude, lng: location.coords.longitude },
-                    { lat: siguiente.lat, lng: siguiente.lng }
-                  );
-                }
-              }
-            }
           }
         );
       } catch (error) {
         console.error('Error al iniciar rastreo GPS:', error);
-        Alert.alert('Error', 'No se pudo acceder a la ubicación GPS');
       }
     };
 
     iniciarRastreo();
 
     return () => {
-      if (watchId.current) {
-        watchId.current.remove();
-      }
+      watchId.current?.remove();
+      watchId.current = null;
     };
-  }, [permisoConcedido, servicioFinalizado, ruta, calcularDistanciaARuta, calcularRuta, determinarSiguienteHito]);
+  }, [permisoConcedido, servicioFinalizado]);
 
   // Calcular ruta inicial cuando cambia el siguiente hito
   useEffect(() => {
@@ -267,6 +248,13 @@ export function RouteMap({
     return hito.completado ? '#22c55e' : '#ef4444'; // Verde=completado, Rojo=pendiente
   };
 
+  const getLetraHito = (paso: number): string => {
+    if (paso === 2) return 'A';
+    if (paso === 3) return 'B';
+    if (paso >= 4) return 'C';
+    return '';
+  };
+
   // Región inicial del mapa
   const regionInicial = ubicacionActual ? {
     latitude: ubicacionActual.coords.latitude,
@@ -293,13 +281,13 @@ export function RouteMap({
         initialRegion={regionInicial}
         showsUserLocation
         showsMyLocationButton
-        followsUserLocation={!servicioFinalizado}
+        followsUserLocation={false}
       >
         {/* Ruta calculada */}
         {ruta.length > 0 && (
           <Polyline
             coordinates={ruta}
-            strokeColor="#3b82f6"
+            strokeColor="#C8102E"
             strokeWidth={4}
             lineCap="round"
             lineJoin="round"
@@ -328,11 +316,13 @@ export function RouteMap({
             <Marker
               key={hito.id}
               coordinate={coords}
-              title={`Paso ${hito.paso}`}
+              title={`Punto ${getLetraHito(hito.paso)}`}
               description={hito.descripcion || (hito.completado ? 'Completado' : 'Pendiente')}
               pinColor={getColorMarcador(hito)}
               identifier={`hito-${hito.id}`}
-            />
+            >
+               <View style={[styles.markerLabel, { backgroundColor: getColorMarcador(hito) }]}><Text style={styles.markerLabelText}>{getLetraHito(hito.paso)}</Text></View>
+            </Marker>
           );
         })}
 
@@ -367,5 +357,19 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  markerLabel: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  markerLabelText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

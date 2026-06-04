@@ -824,20 +824,6 @@ export default function InicioMensajero() {
     refreshAllTabsRef.current = refreshAllTabs;
   }, [refreshAllTabs]);
 
-  // Actualización periódica de servicios en progreso para obtener coordenadas del mensajero en tiempo real
-  useEffect(() => {
-    if (!usuario || tab !== 'progreso') return;
-
-    const interval = setInterval(async () => {
-      try {
-        await cargarTab('progreso');
-      } catch {
-      }
-    }, 15000); // Actualizar cada 15 segundos
-
-    return () => clearInterval(interval);
-  }, [usuario, tab, cargarTab]);
-
   useFocusEffect(
     useCallback(() => {
       setSelectedIds([]);

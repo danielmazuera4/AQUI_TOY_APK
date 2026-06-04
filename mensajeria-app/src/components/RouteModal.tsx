@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   Platform,
   PermissionsAndroid,
+  Alert,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
-import { fetchGoogleDirectionsWithWaypoint, decodePolyline } from '../services/googleDirections';
+import { fetchGoogleDirections, decodePolyline } from '../services/googleDirections';
 
 type RouteModalProps = {
   visible: boolean;
@@ -51,8 +52,6 @@ type RouteModalProps = {
 };
 
 export default function RouteModal({ visible, onClose, servicio }: RouteModalProps) {
-  console.log("=== INSPECCIÓN DE JSON ===", JSON.stringify(servicio, null, 2));
-  
   // Identificar si el hito de origen ya se cerró
   const origenCerrado = servicio?.estado === 'en_ruta' || servicio?.estado === 'recogido';
   const servicioCompletado = servicio?.estado === 'completado';
@@ -93,13 +92,6 @@ export default function RouteModal({ visible, onClose, servicio }: RouteModalPro
       mensajero: isNaN(latM) || isNaN(lngM) ? null : { latitude: latM, longitude: lngM }
     };
   }, [servicio]);
-
-  console.log("=== CONTROL DE MAPA ===", {
-    raw_origen_lat: servicio?.origen_lat,
-    raw_origen_lng: servicio?.origen_lng,
-    parsed_origen: coords?.origen,
-    parsed_destino: coords?.destino
-  });
 
   useEffect(() => {
     if (visible && servicio) {
@@ -174,38 +166,29 @@ export default function RouteModal({ visible, onClose, servicio }: RouteModalPro
   };
 
   const fetchRoute = async (coordsData: typeof coords) => {
-    if (!coordsData?.origen || !coordsData?.destino) return;
+    if (!coordsData) return;
+
+    // La ruta debe ir desde el mensajero (o su ubicación actual) hasta el siguiente hito
+    const startLat = currentLocation?.coords.latitude || coordsData?.mensajero?.latitude;
+    const startLng = currentLocation?.coords.longitude || coordsData?.mensajero?.longitude;
+    const target = !origenCerrado ? coordsData?.origen : coordsData?.destino;
+
+    if (!startLat || !startLng || !target) return;
 
     setRouteData(null);
     setRouteLoading(true);
 
     try {
-      const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.android?.googleMapsApiKey || 
-                                  Constants.expoConfig?.ios?.config?.googleMapsApiKey || 
+      const GOOGLE_MAPS_API_KEY = Constants.expoConfig?.extra?.googleMapsApiKey || 
                                   'AIzaSyAct3GRpIYIzZouX_-ctsQbHVwjPTGt4sQ';
 
-      let result;
-      if (coordsData.mensajero) {
-        result = await fetchGoogleDirectionsWithWaypoint(
-          coordsData.origen.latitude,
-          coordsData.origen.longitude,
-          coordsData.mensajero.latitude,
-          coordsData.mensajero.longitude,
-          coordsData.destino.latitude,
-          coordsData.destino.longitude,
-          GOOGLE_MAPS_API_KEY
-        );
-      } else {
-        result = await fetchGoogleDirectionsWithWaypoint(
-          coordsData.origen.latitude,
-          coordsData.origen.longitude,
-          coordsData.origen.latitude,
-          coordsData.origen.longitude,
-          coordsData.destino.latitude,
-          coordsData.destino.longitude,
-          GOOGLE_MAPS_API_KEY
-        );
-      }
+      const result = await fetchGoogleDirections(
+        startLat,
+        startLng,
+        target.latitude,
+        target.longitude,
+        GOOGLE_MAPS_API_KEY
+      );
 
       if (result) {
         setRouteData({
@@ -226,6 +209,8 @@ export default function RouteModal({ visible, onClose, servicio }: RouteModalPro
         }, 500);
       }
     } catch (error) {
+      console.error("Error fetching directions:", error);
+      Alert.alert("Error de Ruta", "No se pudo obtener la ruta desde Google Maps API.");
     } finally {
       setRouteLoading(false);
     }
@@ -287,7 +272,7 @@ export default function RouteModal({ visible, onClose, servicio }: RouteModalPro
       return (
         <Polyline
           coordinates={routeData.decodedPoints}
-          strokeColor="#2563eb"
+          strokeColor="#C8102E"
           strokeWidth={4}
           lineDashPattern={[]}
         />
@@ -361,25 +346,29 @@ export default function RouteModal({ visible, onClose, servicio }: RouteModalPro
               region={region}
               showsUserLocation
               showsMyLocationButton
-              followsUserLocation
+              followsUserLocation={false}
               onMapReady={() => setMapReady(true)}
             >
               {coords?.origen && (
                 <Marker
                   coordinate={coords.origen}
-                  title="Origen"
+                  title="Punto A (Origen)"
                   description={servicio?.origen || ''}
                   pinColor={origenCerrado ? '#16a34a' : '#ef4444'}
-                />
+                >
+                  <View style={[styles.markerLabel, { backgroundColor: origenCerrado ? '#16a34a' : '#ef4444' }]}><Text style={styles.markerLabelText}>A</Text></View>
+                </Marker>
               )}
 
               {coords?.destino && (
                 <Marker
                   coordinate={coords.destino}
-                  title="Destino"
+                  title="Punto B (Destino)"
                   description={servicio?.destino || ''}
                   pinColor={servicioCompletado ? '#16a34a' : '#ef4444'}
-                />
+                >
+                  <View style={[styles.markerLabel, { backgroundColor: servicioCompletado ? '#16a34a' : '#ef4444' }]}><Text style={styles.markerLabelText}>B</Text></View>
+                </Marker>
               )}
 
               {coords?.mensajero && (
@@ -503,5 +492,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     flex: 1,
+  },
+  markerLabel: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  markerLabelText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 });

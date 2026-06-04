@@ -161,6 +161,11 @@
         }
     </style>
     <script>
+        // Fallback global para evitar errores si el script carga antes que la lógica de página
+        window.initMap = window.initMap || function() { console.log("Google Maps API ready"); };
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAct3GRpIYIzZouX_-ctsQbHVwjPTGt4sQ&libraries=places&callback=initMap" async defer></script>
+    <script>
         window.GOOGLE_MAPS_API_KEY = "{{ google_maps_api_key|default:''|escapejs }}";
     </script>
     <script>
