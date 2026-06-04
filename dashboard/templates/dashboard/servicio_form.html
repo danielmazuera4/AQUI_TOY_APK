@@ -115,12 +115,16 @@
 
                 <div>
                     <label class="block text-gray-900 font-semibold mb-2">Origen</label>
-                    <textarea name="origen" rows="2" placeholder="Dirección de recogida" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>{{ origen_value }}</textarea>
+                    <input type="text" id="origen-input" name="origen" value="{{ origen_value }}" placeholder="Dirección de recogida" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                    <input type="hidden" id="origen-lat" name="origen_lat">
+                    <input type="hidden" id="origen-lng" name="origen_lng">
                 </div>
 
                 <div>
                     <label class="block text-gray-900 font-semibold mb-2">Destino</label>
-                    <textarea name="destino" rows="2" placeholder="Dirección de entrega" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>{{ destino_value }}</textarea>
+                    <input type="text" id="destino-input" name="destino" value="{{ destino_value }}" placeholder="Dirección de entrega" class="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600 {% if edicion_bloqueada %}bg-gray-100 text-gray-500 cursor-not-allowed{% endif %}" {% if edicion_bloqueada %}disabled{% endif %}>
+                    <input type="hidden" id="destino-lat" name="destino_lat">
+                    <input type="hidden" id="destino-lng" name="destino_lng">
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -157,6 +161,81 @@
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalConfirmarSalirServicio'));
         modal.show();
     }
+
+    /**
+     * Inicializa los objetos de Autocomplete para Origen y Destino.
+     * Esta función es llamada automáticamente por el callback de la API.
+     */
+    function initGooglePlaces() {
+        const config = {
+            types: ['address'],
+            componentRestrictions: { country: 'co' }
+        };
+
+        const inputOrigen = document.getElementById('origen-input');
+        const inputDestino = document.getElementById('destino-input');
+
+        if (!inputOrigen || !inputDestino) {
+            return;
+        }
+
+        // Limpiar coordenadas si el usuario modifica el texto manualmente
+        const clearCoords = (prefix) => {
+            document.getElementById(`${prefix}-lat`).value = '';
+            document.getElementById(`${prefix}-lng`).value = '';
+        };
+
+        inputOrigen.addEventListener('input', () => clearCoords('origen'));
+        inputDestino.addEventListener('input', () => clearCoords('destino'));
+
+        try {
+            const autocompleteOrigen = new google.maps.places.Autocomplete(inputOrigen, config);
+            const autocompleteDestino = new google.maps.places.Autocomplete(inputDestino, config);
+
+            // Listener para Origen
+            autocompleteOrigen.addListener('place_changed', function() {
+                const place = autocompleteOrigen.getPlace();
+                if (place.geometry && place.geometry.location) {
+                    document.getElementById('origen-lat').value = place.geometry.location.lat();
+                    document.getElementById('origen-lng').value = place.geometry.location.lng();
+                } else {
+                    clearCoords('origen');
+                }
+            });
+
+            // Listener para Destino
+            autocompleteDestino.addListener('place_changed', function() {
+                const place = autocompleteDestino.getPlace();
+                if (place.geometry && place.geometry.location) {
+                    document.getElementById('destino-lat').value = place.geometry.location.lat();
+                    document.getElementById('destino-lng').value = place.geometry.location.lng();
+                } else {
+                    clearCoords('destino');
+                }
+            });
+        } catch (error) {
+            console.warn('Google Maps no pudo cargar el Autocomplete:', error);
+        }
+    }
+
+    // Validación del formulario antes de enviar
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const oLat = document.getElementById('origen-lat').value;
+        const dLat = document.getElementById('destino-lat').value;
+        const origenTexto = document.getElementById('origen-input').value;
+        const destinoTexto = document.getElementById('destino-input').value;
+
+        if (!oLat || !dLat || !origenTexto || !destinoTexto) {
+            e.preventDefault();
+            alert('Error: Debes seleccionar direcciones válidas de la lista de sugerencias de Google para poder crear el servicio (deben incluir coordenadas).');
+            
+            if (!oLat) document.getElementById('origen-input').focus();
+            else if (!dLat) document.getElementById('destino-input').focus();
+        }
+    });
 </script>
+
+<!-- Carga de la API de Google Maps -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAct3GRpIYIzZouX_-ctsQbHVwjPTGt4sQ&libraries=places&callback=initGooglePlaces" async defer></script>
 
 {% endblock %}

@@ -1621,6 +1621,14 @@ async function abrirModal(id) {
           <i class="fas fa-map-pin"></i> Ubicación en vivo
         </div>
         <div id="map-container" class="h-64 w-full lg:h-72"></div>
+        <div id="route-info" class="absolute bottom-4 right-4 z-10 hidden rounded-xl bg-white px-3 py-2 shadow-lg border border-gray-200">
+          <div class="flex items-center gap-2 text-xs font-semibold text-gray-900">
+            <i class="fas fa-route text-red-600"></i>
+            <span id="route-distance">-</span>
+            <span class="text-gray-400">|</span>
+            <span id="route-duration">-</span>
+          </div>
+        </div>
       </div>`;
 
     const mensajeroHTML = d.mensajero
@@ -1756,18 +1764,38 @@ async function abrirModal(id) {
       messengerTrigger.addEventListener('click', () => openMessengerModal(d.mensajero));
     }
 
-    // Inicializar mapa de forma perezosa sólo si hay coordenadas del mensajero
+    // Inicializar mapa de forma perezosa sólo si hay coordenadas
     (function initLazyMap() {
       const container = document.getElementById('map-container');
       if (!container) return;
-      const lat = d.mensajero_lat;
-      const lng = d.mensajero_lng;
-      if (!lat || !lng) {
+      
+      const origenLat = Number(d.origen_lat);
+      const origenLng = Number(d.origen_lng);
+      const destinoLat = Number(d.destino_lat);
+      const destinoLng = Number(d.destino_lng);
+      const mensajeroLat = Number(d.mensajero_lat);
+      const mensajeroLng = Number(d.mensajero_lng);
+      
+      console.log('DEBUG: Web Dashboard Map - Coordenadas:', {
+        origenLat, origenLng, destinoLat, destinoLng, mensajeroLat, mensajeroLng,
+        tipos: {
+          origenLat: typeof origenLat,
+          origenLng: typeof origenLng,
+          destinoLat: typeof destinoLat,
+          destinoLng: typeof destinoLng,
+          mensajeroLat: typeof mensajeroLat,
+          mensajeroLng: typeof mensajeroLng,
+        },
+        isValid: !isNaN(origenLat) && !isNaN(origenLng) && !isNaN(destinoLat) && !isNaN(destinoLng),
+      });
+      
+      // Si no hay coordenadas de origen y destino, mostrar placeholder
+      if (!origenLat || !origenLng || !destinoLat || !destinoLng) {
         container.innerHTML = `
           <div class="mapa-placeholder">
             <i class="fas fa-map-marked-alt"></i>
             <strong>Ubicación no disponible</strong>
-            <span>El mensajero aún no ha compartido su ubicación.</span>
+            <span>No hay coordenadas de origen y destino.</span>
           </div>`;
         return;
       }
@@ -1789,12 +1817,197 @@ async function abrirModal(id) {
 
       loadLeaflet().then((L) => {
         container.innerHTML = '';
-        const map = L.map(container).setView([lat, lng], 15);
+        
+        // Calcular centro y bounds
+        const coordinates = [[origenLat, origenLng], [destinoLat, destinoLng]];
+        if (mensajeroLat && mensajeroLng && !isNaN(mensajeroLat) && !isNaN(mensajeroLng)) {
+          coordinates.push([mensajeroLat, mensajeroLng]);
+        }
+        
+        const bounds = L.latLngBounds(coordinates);
+        const map = L.map(container).fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+        
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
-        L.marker([lat, lng]).addTo(map).bindPopup(d.mensajero ? d.mensajero.username : 'Mensajero');
+        
+        // Marcador de origen (azul)
+        const origenIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: '<div style="background-color: #2563eb; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        L.marker([origenLat, origenLng], { icon: origenIcon }).addTo(map).bindPopup('<strong>Origen</strong><br>' + escapeHtml(d.origen || ''));
+        
+        // Marcador de destino (verde)
+        const destinoIcon = L.divIcon({
+          className: 'custom-div-icon',
+          html: '<div style="background-color: #16a34a; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        L.marker([destinoLat, destinoLng], { icon: destinoIcon }).addTo(map).bindPopup('<strong>Destino</strong><br>' + escapeHtml(d.destino || ''));
+        
+        // Marcador del mensajero (naranja) si existe
+        if (mensajeroLat && mensajeroLng && !isNaN(mensajeroLat) && !isNaN(mensajeroLng)) {
+          const mensajeroIcon = L.divIcon({
+            className: 'custom-div-icon',
+            html: '<div style="background-color: #f59e0b; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+          });
+          L.marker([mensajeroLat, mensajeroLng], { icon: mensajeroIcon }).addTo(map).bindPopup('<strong>Mensajero</strong><br>' + escapeHtml(d.mensajero?.nombre_completo || d.mensajero?.username || 'Mensajero'));
+        }
+        
+        // Intentar obtener ruta de Google Directions
+        const GOOGLE_MAPS_API_KEY = 'AIzaSyAct3GRpIYIzZouX_-ctsQbHVwjPTGt4sQ';
+        const routeCoordinates = mensajeroLat && mensajeroLng && !isNaN(mensajeroLat) && !isNaN(mensajeroLng)
+          ? [[origenLat, origenLng], [mensajeroLat, mensajeroLng], [destinoLat, destinoLng]]
+          : [[origenLat, origenLng], [destinoLat, destinoLng]];
+        
+        console.log('DEBUG: Web Dashboard Map - Intentando Google Directions con coordenadas:', routeCoordinates);
+        
+        const fetchGoogleRoute = async () => {
+          try {
+            const waypoint = mensajeroLat && mensajeroLng && !isNaN(mensajeroLat) && !isNaN(mensajeroLng)
+              ? `${mensajeroLat},${mensajeroLng}`
+              : '';
+            
+            let url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origenLat},${origenLng}&destination=${destinoLat},${destinoLng}&key=${GOOGLE_MAPS_API_KEY}`;
+            if (waypoint) {
+              url += `&waypoints=${waypoint}`;
+            }
+            
+            console.log('DEBUG: Web Dashboard Map - Google Directions URL:', url);
+            
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            console.log('DEBUG: Web Dashboard Map - Google Directions Response:', {
+              status: data.status,
+              routesLength: data.routes?.length || 0,
+              errorMessage: data.error_message,
+            });
+            
+            if (data.status === 'OK' && data.routes && data.routes.length > 0) {
+              const route = data.routes[0];
+              const polyline = route.overview_polyline.points;
+              const decodedPoints = decodePolyline(polyline);
+              
+              console.log('DEBUG: Web Dashboard Map - Puntos decodificados:', decodedPoints.length);
+              
+              if (decodedPoints.length > 1) {
+                L.polyline(decodedPoints, { color: '#2563eb', weight: 4, opacity: 0.8 }).addTo(map);
+                
+                // Mostrar distancia y duración
+                const totalDistance = route.legs.reduce((sum, leg) => sum + leg.distance.value, 0);
+                const totalDuration = route.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
+                
+                const formatDistance = (meters) => meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${meters} m`;
+                const formatDuration = (seconds) => {
+                  const hours = Math.floor(seconds / 3600);
+                  const minutes = Math.floor((seconds % 3600) / 60);
+                  return hours > 0 ? `${hours}h ${minutes}min` : `${minutes} min`;
+                };
+                
+                const routeInfo = document.getElementById('route-info');
+                const routeDistance = document.getElementById('route-distance');
+                const routeDuration = document.getElementById('route-duration');
+                
+                if (routeInfo && routeDistance && routeDuration) {
+                  routeInfo.classList.remove('hidden');
+                  routeDistance.textContent = formatDistance(totalDistance);
+                  routeDuration.textContent = formatDuration(totalDuration);
+                }
+                
+                console.log('DEBUG: Web Dashboard Map - Ruta Google Directions mostrada:', {
+                  distance: formatDistance(totalDistance),
+                  duration: formatDuration(totalDuration),
+                });
+              }
+            } else {
+              console.warn('DEBUG: Web Dashboard Map - Google Directions falló, usando fallback polyline');
+              throw new Error('Google Directions failed');
+            }
+          } catch (error) {
+            console.warn('DEBUG: Web Dashboard Map - Error en Google Directions, usando fallback:', error);
+            // Fallback: dibujar polyline simple
+            L.polyline(routeCoordinates, { color: '#2563eb', weight: 3, opacity: 0.6, dashArray: '10, 10' }).addTo(map);
+            console.log('DEBUG: Web Dashboard Map - Fallback polyline dibujada');
+          }
+        };
+        
+        // Función para decodificar polyline de Google
+        function decodePolyline(encoded) {
+          const points = [];
+          let index = 0, lat = 0, lng = 0;
+          
+          while (index < encoded.length) {
+            let b, shift = 0, result = 0;
+            do {
+              b = encoded.charCodeAt(index++) - 63;
+              result |= (b & 0x1f) << shift;
+              shift += 5;
+            } while (b >= 0x20);
+            lat += ((result & 1) ? ~(result >> 1) : (result >> 1));
+            
+            shift = result = 0;
+            do {
+              b = encoded.charCodeAt(index++) - 63;
+              result |= (b & 0x1f) << shift;
+              shift += 5;
+            } while (b >= 0x20);
+            lng += ((result & 1) ? ~(result >> 1) : (result >> 1));
+            
+            points.push([lat / 1e5, lng / 1e5]);
+          }
+          return points;
+        }
+        
+        // Cargar ruta
+        void fetchGoogleRoute();
+        
+        // Auto-actualizar ubicación del mensajero cada 30 segundos
+        let updateInterval;
+        if (d.estado === 'en_progreso') {
+          updateInterval = setInterval(async () => {
+            try {
+              const url = SERVICIO_DATA_URL_TEMPLATE.replace('/0/', `/${id}/`);
+              const res = await fetch(url, { credentials: 'same-origin' });
+              if (!res.ok) return;
+              const updatedData = await res.json();
+              
+              const newMensajeroLat = Number(updatedData.mensajero_lat);
+              const newMensajeroLng = Number(updatedData.mensajero_lng);
+              
+              if (newMensajeroLat && newMensajeroLng && !isNaN(newMensajeroLat) && !isNaN(newMensajeroLng)) {
+                console.log('DEBUG: Web Dashboard Map - Actualizando ubicación mensajero:', { newMensajeroLat, newMensajeroLng });
+                
+                // Actualizar marcador del mensajero si existe
+                const mensajeroMarkers = map._layers;
+                for (const layerId in mensajeroMarkers) {
+                  const layer = mensajeroMarkers[layerId];
+                  if (layer.getPopup && layer.getPopup().getContent().includes('Mensajero')) {
+                    layer.setLatLng([newMensajeroLat, newMensajeroLng]);
+                    break;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('DEBUG: Web Dashboard Map - Error actualizando ubicación:', error);
+            }
+          }, 30000);
+        }
+        
+        // Limpiar intervalo al cerrar modal
+        const originalCerrarModal = window.cerrarModal;
+        window.cerrarModal = function() {
+          if (updateInterval) clearInterval(updateInterval);
+          if (originalCerrarModal) originalCerrarModal();
+        };
+        
       }).catch(() => {
         container.innerHTML = `<div class="mapa-placeholder"><i class="fas fa-map-marked-alt"></i><strong>Error cargando el mapa</strong></div>`;
       });

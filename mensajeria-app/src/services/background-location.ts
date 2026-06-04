@@ -12,6 +12,8 @@ type BackgroundLocationData = {
 };
 
 // Esta tarea vive fuera de React para seguir mandando la ubicación aunque la pantalla se cierre.
+// COMENTADO PARA EXPO GO - Background location no soportado en Expo Go Android
+/*
 TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   if (error) {
     return;
@@ -19,6 +21,7 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
   const payload = data as BackgroundLocationData | undefined;
   const latestLocation = payload?.locations?.[0];
+  
   const activeServiceId = await AsyncStorage.getItem(ACTIVE_SERVICE_KEY);
 
   if (!latestLocation || !activeServiceId) {
@@ -26,23 +29,27 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   }
 
   try {
+    const latitud = latestLocation.coords.latitude;
+    const longitud = latestLocation.coords.longitude;
+    
     await api.post(`/servicios/${activeServiceId}/ubicacion/`, {
-      latitud: latestLocation.coords.latitude,
-      longitud: latestLocation.coords.longitude,
+      latitud,
+      longitud,
     });
-  } catch {
-    return;
+  } catch (err) {
   }
 });
+*/
 
 async function ensurePermissions() {
-  // Primero pedimos ubicación en primer plano, y luego la de segundo plano.
   const foreground = await Location.requestForegroundPermissionsAsync();
+  
   if (foreground.status !== 'granted') {
     return false;
   }
 
   const background = await Location.requestBackgroundPermissionsAsync();
+  
   return background.status === 'granted';
 }
 
@@ -51,10 +58,16 @@ export async function setActiveServiceId(serviceId: number) {
 }
 
 export async function getActiveServiceId() {
-  return AsyncStorage.getItem(ACTIVE_SERVICE_KEY);
+  const serviceId = await AsyncStorage.getItem(ACTIVE_SERVICE_KEY);
+  return serviceId;
 }
 
 export async function startBackgroundTracking(serviceId: number) {
+  console.log("=== BACKGROUND LOCATION DESACTIVADO TEMPORALMENTE PARA EXPO GO ===");
+  return; // Detiene la ejecución aquí y evita el congelamiento
+
+  // Código original comentado para Expo Go
+  /*
   const permissionsGranted = await ensurePermissions();
   if (!permissionsGranted) {
     return false;
@@ -63,6 +76,7 @@ export async function startBackgroundTracking(serviceId: number) {
   await setActiveServiceId(serviceId);
 
   const alreadyStarted = await Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
+  
   if (!alreadyStarted) {
     await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
       accuracy: Location.Accuracy.Balanced,
@@ -77,6 +91,7 @@ export async function startBackgroundTracking(serviceId: number) {
   }
 
   return true;
+  */
 }
 
 export async function stopBackgroundTracking() {

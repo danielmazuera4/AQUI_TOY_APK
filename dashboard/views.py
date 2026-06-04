@@ -215,6 +215,11 @@ def _datos_servicio_desde_request(request):
         'tipo_recorrido': (request.POST.get('tipo_recorrido') or '').strip(),
         'tipo_vehiculo': (request.POST.get('tipo_vehiculo') or 'moto').strip(),
         'prioridad': request.POST.get('prioridad', 'normal'),
+        # Agregar coordenadas al diccionario base
+        'origen_lat': _coordenada_request(request, 'origen_lat'),
+        'origen_lng': _coordenada_request(request, 'origen_lng'),
+        'destino_lat': _coordenada_request(request, 'destino_lat'),
+        'destino_lng': _coordenada_request(request, 'destino_lng'),
     }
 
 
@@ -320,52 +325,34 @@ def crear_servicio(request):
     error = None
     if request.method == 'POST':
         try:
-            logger.info(
-                'crear_servicio POST user=%s post_keys=%s file_keys=%s',
-                request.user.pk,
-                list(request.POST.keys()),
-                list(request.FILES.keys()),
-            )
+            # 1. Obtener el diccionario base (ya incluye coordenadas extraídas con _coordenada_request)
             datos = _datos_servicio_desde_request(request)
-            origen = (request.POST.get('origen') or '').strip()
-            destino = (request.POST.get('destino') or '').strip()
+            
+            # 2. Extraer origen y destino de texto para validación
+            origen_texto = (request.POST.get('origen') or '').strip()
+            destino_texto = (request.POST.get('destino') or '').strip()
 
-            if not origen or not destino:
+            if not origen_texto or not destino_texto:
                 error = 'Debes completar origen y destino para crear el servicio.'
             elif not request.user.empresa:
                 error = 'No se pudo crear el servicio porque el usuario no tiene empresa asociada.'
             else:
-                try:
-                    orden = ''.join(random.choices(string.digits, k=5))
-                    origen_lat = _coordenada_request(request, 'origen_lat')
-                    origen_lng = _coordenada_request(request, 'origen_lng')
-                    destino_lat = _coordenada_request(request, 'destino_lat')
-                    destino_lng = _coordenada_request(request, 'destino_lng')
+                # 3. Consolidar metadatos adicionales en el diccionario antes de crear
+                # Esto evita duplicados y mantiene el código limpio
+                datos.update({
+                    'empresa': request.user.empresa,
+                    'cliente': request.user,
+                    'creado_por': request.user,
+                    'orden': ''.join(random.choices(string.digits, k=5)),
+                    'origen': origen_texto,
+                    'destino': destino_texto,
+                    'estado': 'sin_asignar',
+                })
 
-                    servicio = Servicio.objects.create(
-                        empresa=request.user.empresa,
-                        cliente=request.user,
-                        creado_por=request.user,
-                        orden=orden,
-                        **datos,
-                        origen=origen,
-                        destino=destino,
-                        estado='sin_asignar',
-                        origen_lat=origen_lat,
-                        origen_lng=origen_lng,
-                        destino_lat=destino_lat,
-                        destino_lng=destino_lng,
-                    )
+                # 4. Crear el servicio con un solo desempaquetado
+                Servicio.objects.create(**datos)
+                return redirect(_landing_for(request.user))
 
-                    return redirect(_landing_for(request.user))
-                except Exception as exc:
-                    logger.exception(
-                        'crear_servicio fallo user=%s post=%s files=%s',
-                        request.user.pk,
-                        request.POST.dict(),
-                        {k: getattr(v, 'name', str(v)) for k, v in request.FILES.items()},
-                    )
-                    error = f'No se pudo crear el servicio: {exc}'
         except Exception as exc:
             logger.exception('crear_servicio error inesperado user=%s', request.user.pk)
             error = f'No se pudo crear el servicio: {exc}'

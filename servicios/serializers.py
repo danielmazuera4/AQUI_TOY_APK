@@ -35,6 +35,13 @@ class ServicioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Servicio
         fields = '__all__'
+        
+        extra_kwargs = {
+            'origen_lat': {'required': False},
+            'origen_lng': {'required': False},
+            'destino_lat': {'required': False},
+            'destino_lng': {'required': False},
+        }
 
     def get_motivo_abandono(self, obj):
         novedad = obj.novedades.filter(descripcion__icontains='Servicio abandonado por').order_by('-fecha', '-id').first()

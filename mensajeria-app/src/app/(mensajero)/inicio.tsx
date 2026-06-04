@@ -25,7 +25,9 @@ import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/AuthContext';
 import { aceptarServicioApi, abandonarServicioApi, getServiciosApi, reportarNovedadApi, completarPasoApi, cerrarServicioApi, setRefreshStartedCallback, setRefreshCompletedCallback, getIsRefreshing } from '../../services/api';
+import { startBackgroundTracking, setActiveServiceId } from '../../services/background-location';
 import { typography } from '../../theme/typography';
+import RouteModal from '../../components/RouteModal';
 
 const TAB_KEYS = ['progreso', 'disponibles', 'terminados'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -149,6 +151,7 @@ const ServiceCard = memo(function ServiceCard({
   onPickImage,
   onOpenDescription,
   onReportIssue,
+  onOpenRoute,
   estadoPaso2,
   estadoPaso3,
   expanded,
@@ -164,6 +167,7 @@ const ServiceCard = memo(function ServiceCard({
   onPickImage?: (servicio: any, paso: number) => void;
   onOpenDescription?: (servicio: any, paso: number) => void;
   onReportIssue: () => void;
+  onOpenRoute?: () => void;
   estadoPaso2: PasoEvidenciaEstado;
   estadoPaso3: PasoEvidenciaEstado;
   expanded: boolean;
@@ -303,8 +307,7 @@ const ServiceCard = memo(function ServiceCard({
           <TouchableOpacity
             onPress={(event) => {
               event.stopPropagation();
-              const url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(servicio?.origen || '')}&destination=${encodeURIComponent(servicio?.destino || '')}`;
-              Linking.openURL(url).catch(() => Alert.alert('Error', 'No se pudo abrir la ruta'));
+              onOpenRoute?.();
             }}
             style={styles.routeButton}
             activeOpacity={0.86}
@@ -464,6 +467,8 @@ export default function InicioMensajero() {
   const [modalAbandonoVisible, setModalAbandonoVisible] = useState(false);
   const [motivoAbandonoSeleccionado, setMotivoAbandonoSeleccionado] = useState('');
   const [textoAbandonoOtro, setTextoAbandonoOtro] = useState('');
+  const [routeModalVisible, setRouteModalVisible] = useState(false);
+  const [selectedServicioForRoute, setSelectedServicioForRoute] = useState<any | null>(null);
   const fade = useState(new Animated.Value(1))[0];
   const indicatorX = useRef(new Animated.Value(0)).current;
   const indicatorW = useRef(new Animated.Value(0)).current;
@@ -819,6 +824,20 @@ export default function InicioMensajero() {
     refreshAllTabsRef.current = refreshAllTabs;
   }, [refreshAllTabs]);
 
+  // Actualización periódica de servicios en progreso para obtener coordenadas del mensajero en tiempo real
+  useEffect(() => {
+    if (!usuario || tab !== 'progreso') return;
+
+    const interval = setInterval(async () => {
+      try {
+        await cargarTab('progreso');
+      } catch {
+      }
+    }, 15000); // Actualizar cada 15 segundos
+
+    return () => clearInterval(interval);
+  }, [usuario, tab, cargarTab]);
+
   useFocusEffect(
     useCallback(() => {
       setSelectedIds([]);
@@ -1060,6 +1079,9 @@ export default function InicioMensajero() {
               await aceptarServicioApi(id);
               // Limpiamos cualquier residuo local al aceptar para forzar sincronización limpia con Django.
               await AsyncStorage.removeItem(crearProgresoStorageKey(id));
+              // Iniciar tracking de ubicación en segundo plano
+              await setActiveServiceId(id);
+              await startBackgroundTracking(id);
             }
 
             setSelectedIds([]);
@@ -1232,6 +1254,10 @@ export default function InicioMensajero() {
                           onPickImage={(servicio, paso) => openPhotoMenu(servicio, paso)}
                           onOpenDescription={(servicio, paso) => openDescriptionModal(servicio, paso)}
                           onReportIssue={() => openNovedadModal(item)}
+                          onOpenRoute={() => {
+                            setSelectedServicioForRoute(item);
+                            setRouteModalVisible(true);
+                          }}
                       />
                     );
                   }}
@@ -1493,6 +1519,12 @@ export default function InicioMensajero() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <RouteModal
+        visible={routeModalVisible}
+        onClose={() => setRouteModalVisible(false)}
+        servicio={selectedServicioForRoute}
+      />
     </View>
   );
 }

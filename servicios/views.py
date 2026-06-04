@@ -21,7 +21,14 @@ def generar_orden():
 
 
 def _coord(data, clave):
-    valor = data.get(clave)
+    """Extrae coordenadas de forma segura, incluso si vienen anidadas o como string"""
+    valor = data.get(clave) or data.get(clave.replace('_', '')) # Intenta origen_lat y origenlat
+    
+    # Si viene como objeto {'lat': ..., 'lng': ...} común en Google Maps JS
+    if isinstance(valor, dict):
+        if 'lat' in clave: return float(valor.get('lat', 0))
+        if 'lng' in clave: return float(valor.get('lng', 0))
+
     if valor in (None, ''):
         return None
 
@@ -102,18 +109,20 @@ class ServiciosView(APIView):
             )
 
         data = request.data.copy()
-        data['empresa'] = request.user.empresa.id
-        data['cliente'] = request.user.id
         data['orden'] = generar_orden()
 
-        data['origen_lat'] = _coord(data, 'origen_lat')
-        data['origen_lng'] = _coord(data, 'origen_lng')
-        data['destino_lat'] = _coord(data, 'destino_lat')
-        data['destino_lng'] = _coord(data, 'destino_lng')
+        # Asegurar que las coordenadas se extraigan explícitamente antes de validar
+        coords = {
+            'origen_lat': _coord(data, 'origen_lat'),
+            'origen_lng': _coord(data, 'origen_lng'),
+            'destino_lat': _coord(data, 'destino_lat'),
+            'destino_lng': _coord(data, 'destino_lng'),
+        }
+        data.update(coords)
 
         serializer = ServicioSerializer(data=data)
         if serializer.is_valid():
-            servicio = serializer.save(creado_por=request.user, cliente=request.user)
+            servicio = serializer.save(creado_por=request.user, cliente=request.user, empresa=request.user.empresa)
 
             return Response(ServicioSerializer(servicio).data, status=status.HTTP_201_CREATED)
 
@@ -167,6 +176,12 @@ class ActualizarUbicacionMensajeroView(APIView):
 
         if latitud is None or longitud is None:
             return Response({'error': 'Latitud y longitud son obligatorias'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            latitud = float(latitud)
+            longitud = float(longitud)
+        except (ValueError, TypeError):
+            return Response({'error': 'Coordenadas inválidas'}, status=status.HTTP_400_BAD_REQUEST)
 
         servicio.mensajero_lat = latitud
         servicio.mensajero_lng = longitud
