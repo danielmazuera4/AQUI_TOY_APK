@@ -605,7 +605,7 @@ def panel_registros_view(request):
         return HttpResponseForbidden('No autorizado: Solo registro coordinadores pueden acceder a este panel')
 
     if request.method == 'POST':
-        tipo_reporte = request.POST.get('tipo_reporte')
+        tipo = request.POST.get('tipo')
         registro_id = request.POST.get('registro_id')
         rango_tiempo = request.POST.get('rango_tiempo')
         fecha_inicio = request.POST.get('fecha_inicio')
@@ -635,13 +635,13 @@ def panel_registros_view(request):
         queryset = Servicio.objects.filter(
             fecha_creacion__date__gte=fecha_inicio,
             fecha_creacion__date__lte=fecha_fin
-        ).select_related('cliente', 'mensajero', 'creado_por').prefetch_related('novedades')
+        ).select_related('cliente', 'mensajero', 'creado_por', 'empresa').prefetch_related('novedades')
 
-        if tipo_reporte == 'usuario' and registro_id:
+        if tipo == 'usuario' and registro_id:
             queryset = queryset.filter(creado_por_id=registro_id)
-        elif tipo_reporte == 'cliente' and registro_id:
-            queryset = queryset.filter(cliente_id=registro_id)
-        elif tipo_reporte == 'mensajero' and registro_id:
+        elif tipo == 'cliente' and registro_id:
+            queryset = queryset.filter(empresa_id=registro_id)
+        elif tipo == 'mensajero' and registro_id:
             queryset = queryset.filter(mensajero_id=registro_id)
 
         servicios_data = []
@@ -653,7 +653,8 @@ def panel_registros_view(request):
                 'Orden': servicio.orden,
                 'Origen': servicio.origen,
                 'Destino': servicio.destino,
-                'Cliente': f"{servicio.cliente.username} - {servicio.cliente.get_full_name() or ''}",
+                'Cliente': f"{servicio.cliente.username} - {servicio.cliente.get_full_name() or ''}" if servicio.cliente else 'Sin cliente',
+                'Empresa': servicio.empresa.nombre if servicio.empresa else 'Sin empresa',
                 'Mensajero': f"{servicio.mensajero.username} - {servicio.mensajero.get_full_name() or ''}" if servicio.mensajero else 'Sin asignar',
                 'Valor': float(servicio.valor),
                 'Fecha': servicio.fecha_creacion.strftime('%Y-%m-%d %H:%M:%S'),
@@ -664,7 +665,7 @@ def panel_registros_view(request):
         df = pd.DataFrame(servicios_data)
 
         if df.empty:
-            df = pd.DataFrame(columns=['ID Servicio', 'Orden', 'Origen', 'Destino', 'Cliente', 'Mensajero', 'Valor', 'Fecha', 'Estado', 'Novedades/Comentarios'])
+            df = pd.DataFrame(columns=['ID Servicio', 'Orden', 'Origen', 'Destino', 'Cliente', 'Empresa', 'Mensajero', 'Valor', 'Fecha', 'Estado', 'Novedades/Comentarios'])
 
         total_servicios = len(df)
         suma_total = df['Valor'].sum() if not df.empty else 0
@@ -675,6 +676,7 @@ def panel_registros_view(request):
             'Origen': '',
             'Destino': '',
             'Cliente': '',
+            'Empresa': '',
             'Mensajero': '',
             'Valor': suma_total,
             'Fecha': '',
@@ -685,7 +687,7 @@ def panel_registros_view(request):
         df_final = pd.concat([df, fila_totales], ignore_index=True)
 
         response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        response['Content-Disposition'] = f'attachment; filename=reporte_{tipo_reporte}_{hoy.strftime("%Y%m%d")}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename=reporte_{tipo}_{hoy.strftime("%Y%m%d")}.xlsx'
         
         with pd.ExcelWriter(response, engine='openpyxl') as writer:
             df_final.to_excel(writer, index=False, sheet_name='Reporte')
@@ -706,12 +708,14 @@ def panel_registros_view(request):
 
         return response
 
-    clientes = Usuario.objects.filter(rol='cliente', empresa=request.user.empresa).values('id', 'username', 'first_name', 'last_name')
-    usuarios = Usuario.objects.filter(rol__in=['coordinador', 'registro_coordinador'], empresa=request.user.empresa).values('id', 'username', 'first_name', 'last_name')
-    mensajeros = Usuario.objects.filter(rol='mensajero', empresa=request.user.empresa).values('id', 'username', 'first_name', 'last_name')
+    from usuarios.models import Empresa
+    
+    empresas = Empresa.objects.filter(activa=True).values('id', 'nombre')
+    usuarios = Usuario.objects.filter(rol__in=['coordinador', 'registro_coordinador']).values('id', 'username', 'first_name', 'last_name')
+    mensajeros = Usuario.objects.filter(rol='mensajero').values('id', 'username', 'first_name', 'last_name')
 
     context = {
-        'clientes': list(clientes),
+        'empresas': list(empresas),
         'usuarios': list(usuarios),
         'mensajeros': list(mensajeros),
     }

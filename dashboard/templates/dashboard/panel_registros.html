@@ -7,11 +7,11 @@
     <div class="max-w-6xl mx-auto">
         <div class="text-center mb-12">
             <h1 class="text-4xl font-bold text-gray-800 mb-2">Panel de Registros</h1>
-            <p class="text-gray-600">Genera reportes de servicios por Usuarios, Clientes o Mensajeros</p>
+            <p class="text-gray-600">Genera reportes de servicios por Usuarios, Empresas o Mensajeros</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <!-- Tarjeta Servicios por Usuarios -->
+            <!-- Tarjeta Servicios por Usuarios (Coordinadores) -->
             <div class="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer"
                  onclick="openModal('usuario')">
                 <div class="p-8 text-center">
@@ -19,19 +19,19 @@
                         <i class="fas fa-user-tie text-4xl text-blue-600"></i>
                     </div>
                     <h2 class="text-2xl font-bold text-gray-800 mb-3">Servicios por Usuarios</h2>
-                    <p class="text-gray-600">Genera reportes filtrando por el usuario que creó el servicio</p>
+                    <p class="text-gray-600">Genera reportes filtrando por el coordinador que creó el servicio</p>
                 </div>
             </div>
 
-            <!-- Tarjeta Servicios por Clientes -->
+            <!-- Tarjeta Servicios por Empresas (Clientes) -->
             <div class="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 cursor-pointer"
                  onclick="openModal('cliente')">
                 <div class="p-8 text-center">
                     <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                         <i class="fas fa-building text-4xl text-green-600"></i>
                     </div>
-                    <h2 class="text-2xl font-bold text-gray-800 mb-3">Servicios por Clientes</h2>
-                    <p class="text-gray-600">Genera reportes filtrando por el cliente solicitante</p>
+                    <h2 class="text-2xl font-bold text-gray-800 mb-3">Servicios por Empresas</h2>
+                    <p class="text-gray-600">Genera reportes filtrando por la empresa cliente</p>
                 </div>
             </div>
 
@@ -50,7 +50,7 @@
     </div>
 </div>
 
-<!-- Modal Usuario -->
+<!-- Modal Usuario (Coordinadores) -->
 <div id="modal-usuario" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 transform transition-all">
         <div class="p-6 border-b border-gray-200">
@@ -66,10 +66,10 @@
         </div>
         <form method="post" class="p-6">
             {% csrf_token %}
-            <input type="hidden" name="tipo_reporte" value="usuario">
+            <input type="hidden" name="tipo" value="usuario">
             
             <div class="mb-4">
-                <label class="block text-gray-700 font-semibold mb-2">Seleccionar Usuario</label>
+                <label class="block text-gray-700 font-semibold mb-2">Seleccionar Usuario (Coordinador)</label>
                 <select name="registro_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <option value="">-- Seleccione un usuario --</option>
                     {% for usuario in usuarios %}
@@ -109,14 +109,14 @@
     </div>
 </div>
 
-<!-- Modal Cliente -->
+<!-- Modal Cliente (Empresas) -->
 <div id="modal-cliente" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 transform transition-all">
         <div class="p-6 border-b border-gray-200">
             <div class="flex items-center justify-between">
                 <h3 class="text-2xl font-bold text-gray-800">
                     <i class="fas fa-building text-green-600 mr-2"></i>
-                    Reporte por Cliente
+                    Reporte por Empresa
                 </h3>
                 <button onclick="closeModal('cliente')" class="text-gray-400 hover:text-gray-600 text-2xl">
                     <i class="fas fa-times"></i>
@@ -125,14 +125,14 @@
         </div>
         <form method="post" class="p-6">
             {% csrf_token %}
-            <input type="hidden" name="tipo_reporte" value="cliente">
+            <input type="hidden" name="tipo" value="cliente">
             
             <div class="mb-4">
-                <label class="block text-gray-700 font-semibold mb-2">Seleccionar Cliente</label>
+                <label class="block text-gray-700 font-semibold mb-2">Seleccionar Empresa</label>
                 <select name="registro_id" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
-                    <option value="">-- Seleccione un cliente --</option>
-                    {% for cliente in clientes %}
-                        <option value="{{ cliente.id }}">{{ cliente.username }} - {{ cliente.first_name }} {{ cliente.last_name }}</option>
+                    <option value="">-- Seleccione una empresa --</option>
+                    {% for empresa in empresas %}
+                        <option value="{{ empresa.id }}">{{ empresa.nombre }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -184,7 +184,7 @@
         </div>
         <form method="post" class="p-6">
             {% csrf_token %}
-            <input type="hidden" name="tipo_reporte" value="mensajero">
+            <input type="hidden" name="tipo" value="mensajero">
             
             <div class="mb-4">
                 <label class="block text-gray-700 font-semibold mb-2">Seleccionar Mensajero</label>
