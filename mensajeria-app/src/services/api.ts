@@ -4,6 +4,7 @@ import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 
 const BASE_URLS = [
+  'http://10.20.172.251:8000/api/',
   'http://10.201.197.251:8000/api/',
   process.env.EXPO_PUBLIC_API_URL,
   'http://10.248.167.251:8000/api/',
