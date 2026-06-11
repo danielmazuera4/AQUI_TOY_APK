@@ -19,8 +19,9 @@ class Usuario(AbstractUser):
         ('coordinador', 'Coordinador'),
         ('cliente', 'Cliente'),
         ('mensajero', 'Mensajero'),
+        ('registro_coordinador', 'Registro Coordinador'),
     ]
-    rol = models.CharField(max_length=20, choices=ROL_CHOICES)
+    rol = models.CharField(max_length=25, choices=ROL_CHOICES)
     telefono = models.CharField(max_length=20, blank=True)
     foto_perfil = models.ImageField(upload_to='perfiles/', blank=True, null=True)
     empresa = models.ForeignKey(

@@ -55,6 +55,7 @@ class Servicio(models.Model):
     tipo_servicio = models.CharField(max_length=100, blank=True)
     tipo_pago = models.CharField(max_length=100, blank=True)
     descripcion_pago = models.TextField(blank=True)
+    valor = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tipo_recorrido = models.CharField(max_length=100, blank=True)
     tipo_vehiculo = models.CharField(max_length=50)
     prioridad = models.CharField(max_length=10, choices=PRIORIDAD_CHOICES, default='normal')

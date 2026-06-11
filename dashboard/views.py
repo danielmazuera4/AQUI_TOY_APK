@@ -1,15 +1,19 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.http import HttpResponseForbidden
 from django.core.paginator import Paginator
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q, Sum
 from servicios.models import Servicio, Seguimiento, Novedad
+from usuarios.models import Usuario
 import logging
 import random, string
+import pandas as pd
+from datetime import datetime, timedelta
+from django.utils import timezone
 
 
 logger = logging.getLogger(__name__)
@@ -22,6 +26,8 @@ def _landing_for(user):
         return 'dashboard:cliente_inicio'
     if user.rol == 'coordinador':
         return 'dashboard:inicio'
+    if user.rol == 'registro_coordinador':
+        return 'dashboard:panel_registros'
     return None
 
 
@@ -591,3 +597,122 @@ def mensajero_inicio(request):
         'terminados_count': terminados.count(),
     }
     return render(request, 'dashboard/mensajero_inicio.html', context)
+
+
+@login_required
+def panel_registros_view(request):
+    if request.user.rol != 'registro_coordinador':
+        return HttpResponseForbidden('No autorizado: Solo registro coordinadores pueden acceder a este panel')
+
+    if request.method == 'POST':
+        tipo_reporte = request.POST.get('tipo_reporte')
+        registro_id = request.POST.get('registro_id')
+        rango_tiempo = request.POST.get('rango_tiempo')
+        fecha_inicio = request.POST.get('fecha_inicio')
+        fecha_fin = request.POST.get('fecha_fin')
+
+        hoy = timezone.now().date()
+        
+        if rango_tiempo == 'dia':
+            fecha_inicio = hoy
+            fecha_fin = hoy
+        elif rango_tiempo == 'quincena':
+            if hoy.day <= 15:
+                fecha_inicio = hoy.replace(day=1)
+                fecha_fin = hoy.replace(day=15)
+            else:
+                fecha_inicio = hoy.replace(day=16)
+                fecha_fin = (hoy.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        elif rango_tiempo == 'mes':
+            fecha_inicio = hoy.replace(day=1)
+            fecha_fin = (hoy.replace(day=1) + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        elif rango_tiempo == 'personalizado':
+            if fecha_inicio:
+                fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            if fecha_fin:
+                fecha_fin = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+
+        queryset = Servicio.objects.filter(
+            fecha_creacion__date__gte=fecha_inicio,
+            fecha_creacion__date__lte=fecha_fin
+        ).select_related('cliente', 'mensajero', 'creado_por').prefetch_related('novedades')
+
+        if tipo_reporte == 'usuario' and registro_id:
+            queryset = queryset.filter(creado_por_id=registro_id)
+        elif tipo_reporte == 'cliente' and registro_id:
+            queryset = queryset.filter(cliente_id=registro_id)
+        elif tipo_reporte == 'mensajero' and registro_id:
+            queryset = queryset.filter(mensajero_id=registro_id)
+
+        servicios_data = []
+        for servicio in queryset:
+            novedades_texto = '; '.join([n.descripcion for n in servicio.novedades.all()])
+            
+            servicios_data.append({
+                'ID Servicio': servicio.id,
+                'Orden': servicio.orden,
+                'Origen': servicio.origen,
+                'Destino': servicio.destino,
+                'Cliente': f"{servicio.cliente.username} - {servicio.cliente.get_full_name() or ''}",
+                'Mensajero': f"{servicio.mensajero.username} - {servicio.mensajero.get_full_name() or ''}" if servicio.mensajero else 'Sin asignar',
+                'Valor': float(servicio.valor),
+                'Fecha': servicio.fecha_creacion.strftime('%Y-%m-%d %H:%M:%S'),
+                'Estado': servicio.get_estado_display(),
+                'Novedades/Comentarios': novedades_texto or 'Sin novedades'
+            })
+
+        df = pd.DataFrame(servicios_data)
+
+        if df.empty:
+            df = pd.DataFrame(columns=['ID Servicio', 'Orden', 'Origen', 'Destino', 'Cliente', 'Mensajero', 'Valor', 'Fecha', 'Estado', 'Novedades/Comentarios'])
+
+        total_servicios = len(df)
+        suma_total = df['Valor'].sum() if not df.empty else 0
+
+        fila_totales = pd.DataFrame([{
+            'ID Servicio': 'TOTALES',
+            'Orden': f'Total servicios: {total_servicios}',
+            'Origen': '',
+            'Destino': '',
+            'Cliente': '',
+            'Mensajero': '',
+            'Valor': suma_total,
+            'Fecha': '',
+            'Estado': '',
+            'Novedades/Comentarios': f'Suma total: ${suma_total:,.2f}'
+        }])
+
+        df_final = pd.concat([df, fila_totales], ignore_index=True)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename=reporte_{tipo_reporte}_{hoy.strftime("%Y%m%d")}.xlsx'
+        
+        with pd.ExcelWriter(response, engine='openpyxl') as writer:
+            df_final.to_excel(writer, index=False, sheet_name='Reporte')
+            
+            worksheet = writer.sheets['Reporte']
+            
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+
+        return response
+
+    clientes = Usuario.objects.filter(rol='cliente', empresa=request.user.empresa).values('id', 'username', 'first_name', 'last_name')
+    usuarios = Usuario.objects.filter(rol__in=['coordinador', 'registro_coordinador'], empresa=request.user.empresa).values('id', 'username', 'first_name', 'last_name')
+    mensajeros = Usuario.objects.filter(rol='mensajero', empresa=request.user.empresa).values('id', 'username', 'first_name', 'last_name')
+
+    context = {
+        'clientes': list(clientes),
+        'usuarios': list(usuarios),
+        'mensajeros': list(mensajeros),
+    }
+    return render(request, 'dashboard/panel_registros.html', context)
