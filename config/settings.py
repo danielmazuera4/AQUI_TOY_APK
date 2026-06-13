@@ -204,3 +204,13 @@ LOGOUT_REDIRECT_URL = '/login/'
 GOOGLE_MAPS_API_KEY = os.environ.get('GOOGLE_MAPS_API_KEY', '')
 
 INTERNAL_IPS = ['127.0.0.1']
+
+
+# Configuración SMTP para envío de correos (Gmail)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'danielmazuera679@gmail.com'  # Reemplazar con el correo del emisor
+EMAIL_HOST_PASSWORD = 'rany xlwz egxz cuzw'  # Reemplazar con tu contraseña de aplicación de 16 letras
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
