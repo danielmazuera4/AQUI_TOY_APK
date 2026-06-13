@@ -53,3 +53,6 @@ __pycache__/
 
 # Base de datos local (opcional, por si usas sqlite)
 db.sqlite3
+
+# archivos subidos por el usuario media
+media/
